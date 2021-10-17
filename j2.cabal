@@ -6,7 +6,7 @@ version:             0.1.0.0
 synopsis:            j2 converter respecting local filesystem and written in haskell
 -- description:         
 homepage:            https://github.com/mitsch/j2
-license:             CC BY 4.0
+license:             OtherLicense
 license-file:        LICENSE
 author:              Michael Koch
 maintainer:          michael.koch@mailbox.org
@@ -20,6 +20,6 @@ executable j2
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.9 && <4.10
+  build-depends:       base >=4.9 && <4.10, parsec >=3.1, transformers>=0.5
   hs-source-dirs:      src
   default-language:    Haskell2010
