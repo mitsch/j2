@@ -1,4 +1,81 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Main where
 
+import System.Console.GetOpt
+import System.IO (FilePath, hPutStrLn, stderr)
+import Control.Monad.Fail (MonadFail)
+import Control.Monad
+import System.Environment
+import Data.List (intercalate)
+import Text.Parsec (runParser, Stream, ParsecT, parseTest)
+
+import AST (Expression(..))
+import Parser   ( expression )
+import Value (Value(..))
+
+instance Show (Expression a) where
+    show (NoneExpr _) = "None"
+    show (BoolExpr True _) = "True"
+    show (BoolExpr False _) = "False"
+    show (IntegerExpr x _) = show x
+    show (NumberExpr x _) = show x
+    show (StringExpr x _) = show x
+    show (SymbolExpr x _) = x
+    show (NegateExpr x _) = "negate(" ++ show x ++ ")"
+    show (ComplementExpr x _) = "not(" ++ show x ++ ")"
+    show (MemberExpr m x _) = "member(" ++ show x ++ ", " ++ m ++ ")"
+    show (IndexExpr i x _) = "at(" ++ show x ++ ", " ++ show i ++ ")"
+    show (MultiplyExpr l r _) = "multiply(" ++show l ++ ", " ++ show r ++ ")"
+    show (DivideExpr l r _) = "divide(" ++ show l ++ ", " ++ show r ++ ")"
+    show (IntegralDivideExpr l r _) = "integral_divide(" ++ show l ++ ", " ++ show r ++ ")"
+    show (ModuloExpr l r _) = "modulo(" ++ show l ++ ", " ++ show r ++ ")"
+    show (AddExpr l r _) = "add(" ++ show l ++ ", " ++ show r ++ ")"
+    show (SubtractExpr l r _) = "subtract(" ++ show l ++ ", " ++ show r ++ ")"
+    show (SameExpr l r _) = "same(" ++ show l ++ ", " ++ show r ++ ")"
+    show (NotSameExpr l r _) = "not_same(" ++ show l ++ ", " ++ show r ++ ")"
+    show (InExpr l r _) = "in(" ++ show l ++ ", " ++ show r ++ ")"
+    show (NotInExpr l r _) = "not_in(" ++ show l ++ ", " ++ show r ++ ")"
+    show (IsExpr l r _) = "is(" ++ show l ++ ", " ++ show r ++ ")"
+    show (IsNotExpr l r _) = "is_not(" ++ show l ++ ", " ++ show r ++ ")"
+    show (LessExpr l r _) = "less(" ++ show l ++ ", " ++ show r ++ ")"
+    show (LessEqualExpr l r _) = "less_eq(" ++ show l ++ ", " ++ show r ++ ")"
+    show (GreaterExpr l r _) = "greater(" ++ show l ++ ", " ++ show r ++ ")"
+    show (GreaterEqualExpr l r _) = "greater_eq(" ++ show l ++ ", " ++ show r ++ ")"
+    show (AndExpr l r _) = "and(" ++ show l ++ ", " ++ show r ++ ")"
+    show (OrExpr l r _) = "or(" ++ show l ++ ", " ++ show r ++ ")"
+    show (ComposeExpr l r _) = "compose(" ++ show l ++ ", " ++ show r ++ ")"
+    show (SliceExpr b e s x _) = "slice(" ++ show x ++ ", " ++ (maybe "Nothing" show b) ++ ", " ++ (maybe "Nothing" show e) ++ ", " ++ (maybe "Nothing" show s) ++ ")"
+    show (ListExpr xs _) = "list(" ++ (intercalate ", " $ fmap show xs) ++ ")"
+    show (DictionaryExpr xs _) = "dictionary(" ++ (intercalate ", " $ flip fmap xs $ \(k,v) -> show k ++ ": " ++ show v) ++ ")"
+    show (ObjectExpr xs _) = "object(" ++ (intercalate ", " $ flip fmap xs $ \(k,v) -> show k ++ ": " ++ show v) ++ ")"
+    show (CallExpr ps x _) = "call(" ++ show x ++ (concat $ flip fmap ps $ \p -> ", " ++ show p) ++ ")"
+
+
+data Options = Options
+    { optConfig :: Maybe Value
+    , optAllowedPaths :: [[Char]]
+    }
+
+defaultOptions = Options
+    { optConfig = Nothing
+    , optAllowedPaths = []
+    }
+
+options :: [OptDescr (Options -> IO Options)]
+options =
+    [ Option "j" ["json-config"]
+             (ReqArg (\f o -> return o) "FILE")
+             "read global variables as JSON document from FILE"
+    , Option "a" ["allow-path"]
+             (ReqArg (\p o -> return $ o {optAllowedPaths = p : optAllowedPaths o}) "PATH")
+             "allow to read PATH"
+    ]
+
+
 main :: IO ()
-main = putStrLn "Hello, Haskell!"
+main = do
+    args <- getArgs
+    input <- getContents
+    parseTest expression input
