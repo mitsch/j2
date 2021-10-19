@@ -12,7 +12,7 @@ import Data.List (intercalate)
 import Text.Parsec (runParser, Stream, ParsecT, parseTest)
 
 import AST (Expression(..))
-import Parser   ( expression )
+import Parser ( expression )
 import Value (Value(..))
 
 instance Show (Expression a) where
