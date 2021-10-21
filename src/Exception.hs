@@ -1,3 +1,7 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Exception () where
 
 import Data.Either (Either(..))
@@ -5,7 +9,7 @@ import Control.Applicative
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 
-class MonadException e m | m -> e where
+class MonadException e m where
     throwException :: e -> m a
     catchException :: m a -> (e -> m a) -> m a
     traceException :: (e -> e) -> m a -> m a
@@ -20,11 +24,11 @@ instance (Monad m) => MonadException e (ExceptionT e m) where
     catchException x f = ExceptionT $ do
         { x' <- runExceptionT x
         ; case x' of
-            { Left e' -> f e'
+            { Left e' -> runExceptionT $ f e'
             ; Right a' -> return $ Right a'
             }
         }
-    traceException f x = ExceptionT $ fmap (either f id) $ runExceptionT x
+    traceException f x = ExceptionT $ fmap (either (Left . f) Right) $ runExceptionT x
 
 instance Functor (m) => Functor (ExceptionT e m) where
     fmap f x = ExceptionT $ fmap (fmap f) $ runExceptionT x
@@ -32,15 +36,10 @@ instance Functor (m) => Functor (ExceptionT e m) where
 
 instance (Applicative m) => Applicative (ExceptionT e m) where
     pure x = ExceptionT $ pure $ Right x
-    liftA2 f x y = ExceptionT $ liftA2 (liftA2 f) (runExceptionT x) (runExceptionT y)
     f <*> x = ExceptionT $ liftA2 (<*>) (runExceptionT f) (runExceptionT x)
 
-instance (Alternative m) => Alternative (ExceptionT e m) where
-    emtpy = ExceptionT empty
-    x <|> y = ExceptionT $ (runExceptionT x) <|> (runExceptionT y)
-
 instance (MonadIO m) => MonadIO (ExceptionT e m) where
-    liftIO x = ExpectedT $ fmap Right $ liftIO x
+    liftIO x = ExceptionT $ fmap Right $ liftIO x
 
 instance MonadTrans (ExceptionT e) where
     lift = liftExceptionT
@@ -51,6 +50,6 @@ instance (Monad m) => Monad (ExceptionT e m) where
         { x' <- runExceptionT x
         ; case x' of
             { Left e' -> return $ Left e'
-            ; Right a' -> f a'
+            ; Right a' -> runExceptionT $ f a'
             }
         }
