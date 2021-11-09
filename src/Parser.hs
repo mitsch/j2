@@ -265,9 +265,7 @@ statement = withPos $ choice
         <$> (expression <* spaces)
         <*> (keyword "import" *> spaces *> commaList1 ((,) <$> (identifier <* spaces) <*> optionMaybe (keyword "as" *> spaces *> identifier)))
     , liftA2 (\_ x-> RawStmt x) (simpleTag "raw")
-        $ many
-        $ notFollowedBy (simpleTag "endraw")
-        *> anyChar
+        $ manyTill anyChar (simpleTag "endraw")
     , fancyTag "block" ((,,)
             <$> (identifier <* spaces)
             <*> (option False $ True <$ keyword "scoped" <* spaces)
