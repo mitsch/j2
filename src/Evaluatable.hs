@@ -1,31 +1,78 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Evaluatable ( Evaluatable, evaluate) where
 
 import AST ( Expression(..), Statement(..) )
+import Value ( Value(..)
+             , expectNone
+             , expectBool
+             , expectInteger
+             , expectDecimal
+             , expectString
+             , expectList
+             , expectDictionary
+             , expectObject
+             , expectFunction
+             , noneVal
+             , boolVal
+             , integerVal
+             , decimalVal
+             , stringVal
+             , listVal
+             , dictionaryVal
+             , objectVal
+             , functionVal
+             , FromValue
+             )
+import qualified Control.Monad.Fail as F
+-- import Resolver ( MonadResolver, resolveName )
+import Control.Applicative ( Alternative, empty, (<|>) )
+import Data.Ratio ( numerator )
+import Data.Maybe ( listToMaybe )
 
-class Evaluatable e where
+anyOf :: Alternative f => [f a] -> f a
+anyOf [] = empty
+anyOf (x:xs) = x <|> anyOf xs
+
+
+toBool :: (FromValue Maybe a) => a -> Bool
+toBool x = maybe False id $ anyOf
+    [ False           <$  expectNone x
+    , id              <$> expectBool x
+    , (0/=)           <$> expectInteger x
+    , (0/=).numerator <$> expectDecimal x
+    , (not.null)      <$> expectString x
+    , (not.null)      <$> expectList x
+    , (not.null)      <$> expectObject x
+    ]
+
+class Evaluatable e m where
     evaluate :: e a -> m (Value, a)
 
 
-instance Evaluatable Expression where
+instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m where
     evaluate (NoneExpr a) = return (NoneVal, a)
     evaluate (BoolExpr b a) = return (BoolVal b, a)
     evaluate (IntegerExpr i a) = return (IntegerVal i, a)
     evaluate (NumberExpr f a) = return (DecimalVal f, a)
     evaluate (StringExpr s a) = return (StringVal s, a)
     evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
+        where resolveName _ = return $ IntegerVal 123
     evaluate (ListExpr es a) = do
         { es' <- mapM evaluate es
         ; return (ListVal $ fmap fst es', a)
         }
     evaluate (DictionaryExpr es a) = do
         { es' <- mapM (\(a,b) -> (\c d -> (fst c, fst d)) <$> evaluate a <*> evaluate b) es
-        ; return (dictionaryVal es', a)
+        ; return (DictionaryVal es', a)
         }
     evaluate (NegateExpr e a) = do
         { (e', ea) <- evaluate e
         ; n <- anyOf
-            [ (integerVal . negate) <$> expectInteger e'
-            , (decimalVal . negate) <$> expectDecimal e'
+            [ (IntegerVal . negate) <$> expectInteger e'
+            , (DecimalVal . negate) <$> expectDecimal e'
             ]
         ; return (n, a)
         }
@@ -41,7 +88,7 @@ instance Evaluatable Expression where
             , null            <$> expectObject e'
             , False           <$  expectFunction e'
             ]
-        ; return (boolVal c, a)
+        ; return (BoolVal c, a)
         }
     evaluate (MemberExpr n e a) = do
         { (e', ea) <- evaluate e
@@ -77,16 +124,16 @@ instance Evaluatable Expression where
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (integerVal.).(+)
+            [ (IntegerVal.).(+)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(+)
+            , (DecimalVal.).(+)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (decimalVal.).(+)
+            , (DecimalVal.).(+)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (decimalVal.).(+)
+            , (DecimalVal.).(+)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -96,16 +143,16 @@ instance Evaluatable Expression where
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (integerVal.).(-)
+            [ (IntegerVal.).(-)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(-)
+            , (DecimalVal.).(-)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (decimalVal.).(-)
+            , (DecimalVal.).(-)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (decimalVal.).(-)
+            , (DecimalVal.).(-)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -115,16 +162,16 @@ instance Evaluatable Expression where
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (integerVal.).(*)
+            [ (IntegerVal.).(*)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(*)
+            , (DecimalVal.).(*)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (decimalVal.).(*)
+            , (DecimalVal.).(*)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (decimalVal.).(*)
+            , (DecimalVal.).(*)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -133,7 +180,7 @@ instance Evaluatable Expression where
     evaluate (DivideExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ;       (\lh rh -> (decimalVal $ lh / rh, a))
+        ;       (\lh rh -> (DecimalVal $ lh / rh, a))
             <$> anyOf [ toRational <$> expectInteger l', expectDecimal l']
             <*> anyOf [ toRational <$> expectInteger r', expectDecimal r']
         }
@@ -141,7 +188,7 @@ instance Evaluatable Expression where
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (integerVal.).div
+            [ (IntegerVal.).div
                 <$> expectInteger l'
                 <*> expectInteger r'
             {- TODO other overloads! -} 
@@ -152,7 +199,7 @@ instance Evaluatable Expression where
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (integerVal.).(mod)
+            [ (IntegerVal.).(mod)
                 <$> expectInteger l'
                 <*> expectInteger r'
             {- TODO other overloads! -}
@@ -162,12 +209,12 @@ instance Evaluatable Expression where
     evaluate (SameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (boolVal $ l' == r', a)
+        ; return (BoolVal $ l' == r', a)
         }
     evaluate (NotSameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (boolVal $ l' /= r', a)
+        ; return (BoolVal $ l' /= r', a)
         }
     evaluate (LessExpr l r a) = do
         { (l', la) <- evaluate l
@@ -180,7 +227,7 @@ instance Evaluatable Expression where
             , (<) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (LessEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -193,7 +240,7 @@ instance Evaluatable Expression where
             , (<=) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (GreaterExpr l r a) = do
         { (l', la) <- evaluate l
@@ -206,7 +253,7 @@ instance Evaluatable Expression where
             , (>) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (GreaterEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -219,7 +266,7 @@ instance Evaluatable Expression where
             , (>=) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (InExpr l r a) = do
         { (l', la) <- evaluate l
@@ -228,7 +275,7 @@ instance Evaluatable Expression where
             [ (l' `elem`) <$> expectList r'
             , (l' `elem`).(fmap fst) <$> expectDictionary r'
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (NotInExpr l r a) = do
         { (l', la) <- evaluate l
@@ -237,14 +284,14 @@ instance Evaluatable Expression where
             [ (l' `notElem`) <$> expectList r'
             , (l' `notElem`).(fmap fst) <$> expectDictionary r'
             ]
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (IsExpr l r a) = F.fail $ "The \"is\" operator is not supported so far!"
     evaluate (IsNotExpr l r a) = F.fail $ "The \"is not\" operator is not supported so far!"
     evaluate (AndExpr l r a) = g <$> evaluate l <*> evaluate r
-        where g l' r' = (boolVal $ (toBool $ fst l') && (toBool $ fst r'), a)
+        where g l' r' = (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a)
     evaluate (OrExpr l r a) = g <$> evaluate l <*> evaluate r
-        where g l' r' = (boolVal $ (toBool $ fst l') || (toBool $ fst r'), a)
+        where g l' r' = (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a)
     evaluate (SliceExpr f l i e a) = F.fail $ "Slice is not supported so far!"
     {-
         =   \e' f' l' i' -> do

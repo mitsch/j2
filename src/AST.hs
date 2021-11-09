@@ -123,16 +123,6 @@ instance Functor (Expression) where
     fmap f (ComposeExpr x y a) = ComposeExpr (fmap f x) (fmap f y) (f a)
 
 
-toBool :: (FromValue Maybe a) => a -> Bool
-toBool x = maybe False id $ anyOf
-    [ False           <$  expectNone x
-    , id              <$> expectBool x
-    , (0/=)           <$> expectInteger x
-    , (0/=).numerator <$> expectDecimal x
-    , (not.null)      <$> expectString x
-    , (not.null)      <$> expectList x
-    , (not.null)      <$> expectObject x
-    ]
 
 
 
