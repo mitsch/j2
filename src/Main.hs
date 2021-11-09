@@ -11,9 +11,18 @@ import System.Environment
 import Data.List (intercalate)
 import Text.Parsec (runParser, Stream, ParsecT, parseTest)
 
-import AST (Expression(..))
-import Parser ( expression )
+import AST ( Expression(..)
+           , Statement(..)
+           , IfStatement(..)
+           , ForStatement(..)
+           , MacroStatement(..)
+           , CallStatement(..)
+           , BlockStatement(..)
+           )
+import Parser ( expression, baseTemplate )
 import Value (Value(..))
+import Exception
+import Evaluatable ( Evaluatable, evaluate )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
@@ -53,6 +62,60 @@ instance Show (Expression a) where
     show (CallExpr ps x _) = "call(" ++ show x ++ (concat $ flip fmap ps $ \p -> ", " ++ show p) ++ ")"
 
 
+toShow :: Statement a -> [[Char]]
+toShow (LiteralStmt x _) = ["Literal: " ++ show x]
+toShow (InterpolationStmt x _) = ["Interpolation: " ++ show x]
+toShow (CommentStmt x _) = ["Comment: " ++ show x]
+toShow (LineBreakStmt x _) = ["LineBreak :" ++ show x]
+toShow (IndentationStmt x _) = ["Indentation: " ++ show x]
+toShow (ForStmt x _) = ["For: " ++ s ++ " <- " ++ e ++ f ++ r] ++ b
+    where s = intercalate ", " $ forSymbols x
+          e = show $ forRange x
+          f = maybe "; select all" (\y-> "; select " ++ show y) $ forFilter x
+          r = case forRecursion x of {True -> "; recurse"; False -> "; dont recurse"; }
+          b = fmap ("\t"++) $ concatMap toShow $ forBody x
+toShow (IfStmt x _) =  (a $ ifBranch x)
+                    ++ (concatMap b $ elifBranches x)
+                    ++ (c $ elseBranch x)
+    where a (e, sts, _) = ["if: " ++ show e] ++ (fmap ("\t"++) $ concatMap toShow sts)
+          b (e, sts, _) = ["elif: " ++ show e] ++ (fmap ("\t"++) $ concatMap toShow sts)
+          c Nothing     = []
+          c (Just (sts,_)) = ["else"] ++ (fmap ("\t"++) $ concatMap toShow sts)
+toShow (MacroStmt x _) = ["Macro: " ++ n ++ "(" ++ ps ++ ")"] ++ bs
+    where n = macroName x
+          ps = intercalate ", " $ macroArguments x
+          bs = fmap ("\t"++) $ concatMap toShow $ macroBody x
+toShow (CallStmt x _) =  ["Call: (" ++ as ++ ") -> " ++ n ++ "(" ++  ps ++ ")"]
+                      ++ b
+    where as = maybe "" (intercalate ", ") $ callArguments x
+          n = callName x
+          ps = intercalate ", " $ fmap show $ callParameters x
+          b = fmap ("\t"++) $ concatMap toShow $ callInput x
+toShow (FilterStmt n sts _) = ["Filter: " ++ n] ++ (fmap ("\t"++) $ concatMap toShow sts)
+toShow (SetStmt ns x sts _) =  ["Set:" ++ (intercalate ", " ns) ++ " <- " ++ show x]
+                            ++ (fmap ("\t"++) $ concatMap toShow sts)
+toShow (IncludeStmt x a b _) = ["Include: " ++ show x ++ (a' a) ++ (b' b)]
+    where a' True = " ignore missing"
+          a' False = " don't ignore missing"
+          b' Nothing = " default contexting"
+          b' (Just True) = " with context"
+          b' (Just False) = " without context"
+toShow (ImportStmt x n _) = ["Import: " ++ show x ++ " as " ++ n]
+toShow (QualifiedImportStmt x ts _) = ["Import: " ++ show x ++ " as " ++ n]
+    where n = intercalate ", " $ fmap (\(a,b) -> a ++ (maybe "" (" as "++) b)) ts
+toShow (RawStmt n _) = ["Raw: " ++ show n]
+toShow (BlockStmt x _) =  ["Block: " ++ (blockName x) ++ (s $ blockScoped x) ++ (r $ blockRequired x)]
+                       ++ b
+    where s True = " scoped"
+          s False = " unscoped"
+          r True = " required"
+          r False = " unrequired"
+          b = fmap ("\t"++) $ concatMap toShow $ blockBody x
+
+instance Show (Statement a) where
+    show = unlines . toShow
+
+
 data Options = Options
     { optConfig :: Maybe Value
     , optAllowedPaths :: [[Char]]
@@ -78,4 +141,4 @@ main :: IO ()
 main = do
     args <- getArgs
     input <- getContents
-    parseTest expression input
+    parseTest baseTemplate input
