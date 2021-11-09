@@ -188,10 +188,19 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
+            {- TODO test on division by zero -}
             [ (integerVal.).div
                 <$> expectInteger l'
                 <*> expectInteger r'
-            {- TODO other overloads! -} 
+            , ((integerVal . floor) .).(/)
+                <$> (toRational <$> expectInteger l')
+                <*> expectDecimal r'
+            , ((integerVal . floor) .).(/)
+                <$> expectDecimal l'
+                <*> (toRational <$> expectInteger r')
+            , ((integerVal . floor) .).(/)
+                <$> expectDecimal l'
+                <*> expectDecimal r'
             ]
         ; return (x, a)
         }
@@ -199,10 +208,19 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
+            {- TODO test modulo by zero -}
             [ (integerVal.).(mod)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            {- TODO other overloads! -}
+            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> expectDecimal l'
+                <*> (toRational <$> expectInteger r')
+            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> (toRational <$> expectInteger l')
+                <*> expectDecimal r'
+            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> expectDecimal l'
+                <*> expectDecimal r'
             ]
         ; return (x, a)
         }
@@ -225,7 +243,8 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (<) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
             , (<) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
             , (<) <$> expectString l' <*> expectString r'
-            {- TODO List, Dictionary -}
+            , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <"
+            , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <"
             ]
         ; return (boolVal x, a)
         }
@@ -238,7 +257,8 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (<=) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
             , (<=) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
             , (<=) <$> expectString l' <*> expectString r'
-            {- TODO List, Dictionary -}
+            , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <="
+            , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <="
             ]
         ; return (boolVal x, a)
         }
@@ -251,7 +271,8 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (>) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
             , (>) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
             , (>) <$> expectString l' <*> expectString r'
-            {- TODO List, Dictionary -}
+            , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >"
+            , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >"
             ]
         ; return (boolVal x, a)
         }
@@ -264,7 +285,8 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (>=) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
             , (>=) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
             , (>=) <$> expectString l' <*> expectString r'
-            {- TODO List, Dictionary -}
+            , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >="
+            , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >="
             ]
         ; return (boolVal x, a)
         }
