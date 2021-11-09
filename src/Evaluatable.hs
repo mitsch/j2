@@ -53,26 +53,26 @@ class Evaluatable e m where
 
 
 instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m where
-    evaluate (NoneExpr a) = return (NoneVal, a)
-    evaluate (BoolExpr b a) = return (BoolVal b, a)
-    evaluate (IntegerExpr i a) = return (IntegerVal i, a)
-    evaluate (NumberExpr f a) = return (DecimalVal f, a)
-    evaluate (StringExpr s a) = return (StringVal s, a)
+    evaluate (NoneExpr a) = return (noneVal, a)
+    evaluate (BoolExpr b a) = return (boolVal b, a)
+    evaluate (IntegerExpr i a) = return (integerVal i, a)
+    evaluate (NumberExpr f a) = return (decimalVal f, a)
+    evaluate (StringExpr s a) = return (stringVal s, a)
     evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
-        where resolveName _ = return $ IntegerVal 123
+        where resolveName _ = return $ integerVal 123
     evaluate (ListExpr es a) = do
         { es' <- mapM evaluate es
-        ; return (ListVal $ fmap fst es', a)
+        ; return (listVal $ fmap fst es', a)
         }
     evaluate (DictionaryExpr es a) = do
         { es' <- mapM (\(a,b) -> (\c d -> (fst c, fst d)) <$> evaluate a <*> evaluate b) es
-        ; return (DictionaryVal es', a)
+        ; return (dictionaryVal es', a)
         }
     evaluate (NegateExpr e a) = do
         { (e', ea) <- evaluate e
         ; n <- anyOf
-            [ (IntegerVal . negate) <$> expectInteger e'
-            , (DecimalVal . negate) <$> expectDecimal e'
+            [ (integerVal . negate) <$> expectInteger e'
+            , (decimalVal . negate) <$> expectDecimal e'
             ]
         ; return (n, a)
         }
@@ -88,7 +88,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , null            <$> expectObject e'
             , False           <$  expectFunction e'
             ]
-        ; return (BoolVal c, a)
+        ; return (boolVal c, a)
         }
     evaluate (MemberExpr n e a) = do
         { (e', ea) <- evaluate e
@@ -124,16 +124,16 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (IntegerVal.).(+)
+            [ (integerVal.).(+)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (DecimalVal.).(+)
+            , (decimalVal.).(+)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (DecimalVal.).(+)
+            , (decimalVal.).(+)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (DecimalVal.).(+)
+            , (decimalVal.).(+)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -143,16 +143,16 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (IntegerVal.).(-)
+            [ (integerVal.).(-)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (DecimalVal.).(-)
+            , (decimalVal.).(-)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (DecimalVal.).(-)
+            , (decimalVal.).(-)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (DecimalVal.).(-)
+            , (decimalVal.).(-)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -162,16 +162,16 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (IntegerVal.).(*)
+            [ (integerVal.).(*)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (DecimalVal.).(*)
+            , (decimalVal.).(*)
                 <$> expectDecimal l'
                 <*> expectDecimal r'
-            , (DecimalVal.).(*)
+            , (decimalVal.).(*)
                 <$> (toRational <$> expectInteger l')
                 <*> expectDecimal r'
-            , (DecimalVal.).(*)
+            , (decimalVal.).(*)
                 <$> expectDecimal l'
                 <*> (toRational <$> expectInteger r')
             ]
@@ -180,7 +180,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
     evaluate (DivideExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ;       (\lh rh -> (DecimalVal $ lh / rh, a))
+        ;       (\lh rh -> (decimalVal $ lh / rh, a))
             <$> anyOf [ toRational <$> expectInteger l', expectDecimal l']
             <*> anyOf [ toRational <$> expectInteger r', expectDecimal r']
         }
@@ -188,7 +188,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (IntegerVal.).div
+            [ (integerVal.).div
                 <$> expectInteger l'
                 <*> expectInteger r'
             {- TODO other overloads! -} 
@@ -199,7 +199,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- anyOf
-            [ (IntegerVal.).(mod)
+            [ (integerVal.).(mod)
                 <$> expectInteger l'
                 <*> expectInteger r'
             {- TODO other overloads! -}
@@ -209,12 +209,12 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
     evaluate (SameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (BoolVal $ l' == r', a)
+        ; return (boolVal $ l' == r', a)
         }
     evaluate (NotSameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (BoolVal $ l' /= r', a)
+        ; return (boolVal $ l' /= r', a)
         }
     evaluate (LessExpr l r a) = do
         { (l', la) <- evaluate l
@@ -227,7 +227,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (<) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (LessEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -240,7 +240,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (<=) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (GreaterExpr l r a) = do
         { (l', la) <- evaluate l
@@ -253,7 +253,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (>) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (GreaterEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -266,7 +266,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             , (>=) <$> expectString l' <*> expectString r'
             {- TODO List, Dictionary -}
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (InExpr l r a) = do
         { (l', la) <- evaluate l
@@ -275,7 +275,7 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             [ (l' `elem`) <$> expectList r'
             , (l' `elem`).(fmap fst) <$> expectDictionary r'
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (NotInExpr l r a) = do
         { (l', la) <- evaluate l
@@ -284,14 +284,14 @@ instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m whe
             [ (l' `notElem`) <$> expectList r'
             , (l' `notElem`).(fmap fst) <$> expectDictionary r'
             ]
-        ; return (BoolVal x, a)
+        ; return (boolVal x, a)
         }
     evaluate (IsExpr l r a) = F.fail $ "The \"is\" operator is not supported so far!"
     evaluate (IsNotExpr l r a) = F.fail $ "The \"is not\" operator is not supported so far!"
     evaluate (AndExpr l r a) = g <$> evaluate l <*> evaluate r
-        where g l' r' = (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a)
+        where g l' r' = (boolVal $ (toBool $ fst l') && (toBool $ fst r'), a)
     evaluate (OrExpr l r a) = g <$> evaluate l <*> evaluate r
-        where g l' r' = (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a)
+        where g l' r' = (boolVal $ (toBool $ fst l') || (toBool $ fst r'), a)
     evaluate (SliceExpr f l i e a) = F.fail $ "Slice is not supported so far!"
     {-
         =   \e' f' l' i' -> do
