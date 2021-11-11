@@ -1,5 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Resolver ( MonadResolver
                 , ResolverT
@@ -14,7 +16,7 @@ import qualified Control.Monad.Fail as F
 import Control.Applicative (Alternative, (<|>), liftA2, empty)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
-class (Monad m) => MonadResolver v m where
+class (Monad m) => MonadResolver v m | m -> v where
     resolveName :: [Char] -> m v
     withNames :: [([Char], v)] -> m a -> m a
 

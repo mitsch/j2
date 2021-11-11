@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Evaluatable ( Evaluatable, evaluate) where
 
@@ -27,7 +28,7 @@ import Value ( Value(..)
              , FromValue
              )
 import qualified Control.Monad.Fail as F
--- import Resolver ( MonadResolver, resolveName )
+import Resolver ( MonadResolver, resolveName )
 import Control.Applicative ( Alternative, empty, (<|>) )
 import Data.Ratio ( numerator )
 import Data.Maybe ( listToMaybe )
@@ -52,14 +53,17 @@ class Evaluatable e m where
     evaluate :: e a -> m (Value, a)
 
 
-instance (Monad m, Alternative m, F.MonadFail m) => Evaluatable Expression m where
+instance ( Monad m
+         , Alternative m
+         , F.MonadFail m
+         , MonadResolver Value m
+    ) => Evaluatable Expression m where
     evaluate (NoneExpr a) = return (noneVal, a)
     evaluate (BoolExpr b a) = return (boolVal b, a)
     evaluate (IntegerExpr i a) = return (integerVal i, a)
     evaluate (NumberExpr f a) = return (decimalVal f, a)
     evaluate (StringExpr s a) = return (stringVal s, a)
     evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
-        where resolveName _ = return $ integerVal 123
     evaluate (ListExpr es a) = do
         { es' <- mapM evaluate es
         ; return (listVal $ fmap fst es', a)
