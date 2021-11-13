@@ -57,7 +57,7 @@ instance ( Monad m
          , Alternative m
          , F.MonadFail m
          , MonadResolver Value m
-    ) => Evaluatable Expression m where
+         ) => Evaluatable Expression m where
     evaluate (NoneExpr a) = return (noneVal, a)
     evaluate (BoolExpr b a) = return (boolVal b, a)
     evaluate (IntegerExpr i a) = return (integerVal i, a)
@@ -361,4 +361,4 @@ instance ( Monad m
         }
     evaluate (LambdaExpr ns b a) = F.fail "Lambda expression is not supported so far"
     evaluate (ComposeExpr x f a) = F.fail "Compose expression is not supported so far"
-    
+
