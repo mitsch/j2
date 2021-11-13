@@ -37,6 +37,8 @@ module Value ( Value(..)
     ) where
 
 import qualified Control.Monad.Fail as F
+import Data.Ratio
+import Data.List ( intercalate )
 
 data Type = NoneType
           | BoolType
@@ -118,6 +120,23 @@ data Value = NoneVal
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
            | FunctionVal [Char]
+
+printCompact :: Value -> [Char]
+printCompact NoneVal = "None"
+printCompact (BoolVal True) = "True"
+printCompact (BoolVal False) = "False"
+printCompact (IntegerVal x) = show x
+printCompact (DecimalVal x) = show $ n / d
+    where n = fromIntegral $ numerator x
+          d = fromIntegral $ denominator x
+printCompact (StringVal x) = show x
+printCompact (ListVal xs) = "[" ++ (intercalate "," $ fmap f xs) ++ "]"
+    where f = printCompact
+printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
+    where f (k,v) = show k ++ ":" ++ printCompact v
+printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
+    where f (k,v) = printCompact k ++ ":" ++ printCompact v
+printCompact (FunctionVal x) = "@" ++ x
 
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
