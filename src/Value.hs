@@ -138,6 +138,41 @@ printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = printCompact k ++ ":" ++ printCompact v
 printCompact (FunctionVal x) = "@" ++ x
 
+
+joinBC :: [[[Char]]] -> [[Char]]
+joinBC [] = []
+joinBC (x:[]) = x
+joinBC (x1:x2:[]) = (f x1) ++ x2 where
+    f [] = error "should never been reached"
+    f (z:[]) = [z ++ ","]
+    f (z:zs) = z:(f zs)
+joinBC (x1:x2:xs) = (f x1) ++ (f x2) ++ (joinBC xs) where
+    f [] = error "should never been reached"
+    f (z:[]) = [z ++ ","]
+    f (z:zs) = z:(f zs)
+
+printPretty :: Value -> [[Char]]
+printPretty NoneVal = ["None"]
+printPretty (BoolVal True) = ["True"]
+printPretty (BoolVal False) = ["False"]
+printPretty (IntegerVal x) = [show x]
+printPretty (DecimalVal x) = [show $ n / d]
+    where n = fromIntegral $ numerator x
+          d = fromIntegral $ denominator x
+printPretty (StringVal x) = [show x]
+printPretty (ListVal xs) = ["["] ++ (fmap g $ joinBC $ fmap f xs) ++ ["]"]
+    where f = printPretty
+          g = ("\t" ++)
+printPretty (ObjectVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
+    where f (k,v) = let (vh:vt) = printPretty v
+                    in (show k ++ ": " ++ vh):(fmap g vt)
+          g = ("\t"++)
+printPretty (DictionaryVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
+    where f (k,v) = let (vh:vt) = printPretty v
+                    in (printCompact k ++ ": " ++ vh):(fmap g vt)
+          g = ("\t"++)
+printPretty (FunctionVal x) = ["@" ++ x]
+
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
 isEqual (BoolVal l) (BoolVal r) = l == r
