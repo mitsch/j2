@@ -153,6 +153,6 @@ main = do
         ; Right xs -> do
             { symbols <- initialSymbols
             ; output <- runResolverT (execute xs) symbols
-            ; putStrLn $ unlines output
+            ; putStrLn $ concat output
             }
         }
