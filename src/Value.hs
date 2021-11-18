@@ -34,6 +34,8 @@ module Value ( Value(..)
               , dictionaryVal
               , objectVal
               , functionVal
+              , printCompact
+              , printPretty
     ) where
 
 import qualified Control.Monad.Fail as F
