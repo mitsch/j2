@@ -5,6 +5,7 @@
 
 module Resolver ( MonadResolver
                 , ResolverT
+                , runResolverT
                 , resolveName
                 , withNames
                 , liftResolverT
