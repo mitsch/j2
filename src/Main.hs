@@ -9,7 +9,8 @@ import Control.Monad.Fail (MonadFail)
 import Control.Monad
 import System.Environment
 import Data.List (intercalate)
-import Text.Parsec (runParser, Stream, ParsecT, parseTest)
+import Text.Parsec (runParser, Stream, ParsecT, parse)
+import Executable (Executable, execute)
 
 import AST ( Expression(..)
            , Statement(..)
@@ -23,6 +24,7 @@ import Parser ( expression, baseTemplate )
 import Value (Value(..))
 import Exception
 import Evaluatable ( Evaluatable, evaluate )
+import Resolver ( runResolverT )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
@@ -137,8 +139,20 @@ options =
     ]
 
 
+
+initialSymbols :: (Monad m) => m [[([Char], Value)]]
+initialSymbols = return []
+
+
 main :: IO ()
 main = do
     args <- getArgs
     input <- getContents
-    parseTest baseTemplate input
+    case parse baseTemplate "input" input of
+        { Left err -> putStrLn $ "Error: " ++ show err
+        ; Right xs -> do
+            { symbols <- initialSymbols
+            ; output <- runResolverT (execute xs) symbols
+            ; putStrLn $ unlines output
+            }
+        }
