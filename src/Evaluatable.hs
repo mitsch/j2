@@ -32,6 +32,7 @@ import Resolver ( MonadResolver, resolveName )
 import Control.Applicative ( Alternative, empty, (<|>) )
 import Data.Ratio ( numerator )
 import Data.Maybe ( listToMaybe )
+import Control.Monad.IO.Class ( MonadIO, liftIO )
 
 anyOf :: Alternative f => [f a] -> f a
 anyOf [] = empty
@@ -57,6 +58,7 @@ instance ( Monad m
          , Alternative m
          , F.MonadFail m
          , MonadResolver Value m
+         , MonadIO m
          ) => Evaluatable Expression m where
     evaluate (NoneExpr a) = return (noneVal, a)
     evaluate (BoolExpr b a) = return (boolVal b, a)
@@ -357,7 +359,9 @@ instance ( Monad m
     evaluate (CallExpr ps c a) = do
         { (c', ca) <- evaluate c
         ; f <- expectFunction c'
-        ; F.fail "have not implemented function call!"
+        ; xs <- mapM (evaluate . snd) ps
+        ; y <- liftIO $ f $ fmap fst xs
+        ; return (y, a)
         }
     evaluate (LambdaExpr ns b a) = F.fail "Lambda expression is not supported so far"
     evaluate (ComposeExpr x f a) = F.fail "Compose expression is not supported so far"

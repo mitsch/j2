@@ -9,6 +9,7 @@ module Executable ( Executable , execute ) where
 import Control.Monad
 import Control.Applicative ( Alternative )
 import Control.Monad.Extra (concatMapM )
+import Control.Monad.IO.Class ( MonadIO )
 import qualified Control.Monad.Fail as F
 import Resolver ( MonadResolver, resolveName, withNames )
 import AST ( Expression(..), Statement(..) )
@@ -94,6 +95,7 @@ mapStmt :: ( Monad m
            , F.MonadFail m
            , Alternative m
            , MonadResolver Value m
+           , MonadIO m
            ) => Statement a -> m [[Char]]
 mapStmt (LiteralStmt x _) = return [x]
 mapStmt (InterpolationStmt x _) = fmap f $ evaluate x
@@ -134,5 +136,6 @@ instance ( Monad m
          , F.MonadFail m
          , Alternative m
          , MonadResolver Value m
+         , MonadIO m
          ) => Executable Statement m where
     execute = concatMapM mapStmt
