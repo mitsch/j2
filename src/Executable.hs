@@ -10,18 +10,18 @@ import Control.Monad
 import Control.Applicative ( Alternative )
 import Control.Monad.Extra (concatMapM )
 import qualified Control.Monad.Fail as F
-import Resolver ( MonadResolver, resolveName )
+import Resolver ( MonadResolver, resolveName, withNames )
 import AST ( Expression(..), Statement(..) )
 import Evaluatable ( Evaluatable, evaluate )
-import Value ( Value, printPretty, printCompact )
+import Value ( Value, printPretty, printCompact, expectList, noneVal )
 
 
-{-
 anyOf :: [Maybe a] -> Maybe a
 anyOf [] = Nothing
 anyOf (Nothing:xs) = anyOf xs
 anyOf ((Just x):xs) = Just x
 
+{-
 
 executeIf :: [(Expression a, [Statement a], a)] -> Maybe ([Statement a], a) -> m [[Char]]
 executeIf [] Nothing = return []
@@ -100,7 +100,16 @@ mapStmt (IfStmt x a) = fail "IfStmt are not supported yet"
 mapStmt (MacroStmt x a) = fail "MacroStmt are not supported yet"
 mapStmt (CallStmt x a) = fail "CallStmt are not supported yet"
 mapStmt (FilterStmt n xs a) = fail "FilterStmt are not supported yet"
-mapStmt (ExprSetStmt ns e zs a) = fail "ExprSetStmt are not supported yet"
+mapStmt (ExprSetStmt ns e zs a) = do
+    (e',_) <- evaluate e
+    ms <- case ns of
+        { [] -> fail "Internal Error: should not happen!!!"
+        ; n:[] -> return [(n, e')]
+        ; ns -> do
+            y <- expectList e'
+            return $ zip ns $ (y ++ (repeat noneVal))
+        }
+    withNames ms $ execute zs
 mapStmt (BlockSetStmt n xs zs a) = fail "BlockSetStmt are not supported yet"
 mapStmt (IncludeStmt x f1 f2 a) = fail "IncludeStmt are not supported yet"
 mapStmt (ImportStmt x n a) = fail "Import Stmt are not supported yet"
