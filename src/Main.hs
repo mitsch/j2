@@ -144,7 +144,7 @@ options =
 
 
 
-initialSymbols :: (Monad m) => m [[([Char], Value)]]
+initialSymbols :: (Monad m) => m [([Char], Value)]
 initialSymbols = return []
 
 
@@ -156,7 +156,7 @@ main = do
         { Left err -> putStrLn $ "Error: " ++ show err
         ; Right xs -> do
             { symbols <- initialSymbols
-            ; output <- runResolverT (execute xs) symbols
+            ; output <- runResolverT (execute xs) [symbols]
             ; putStrLn $ concat output
             }
         }
