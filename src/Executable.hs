@@ -13,7 +13,13 @@ import qualified Control.Monad.Fail as F
 import Resolver ( MonadResolver, resolveName, withNames )
 import AST ( Expression(..), Statement(..) )
 import Evaluatable ( Evaluatable, evaluate )
-import Value ( Value, printPretty, printCompact, expectList, noneVal )
+import Value ( Value
+             , printPretty
+             , printCompact
+             , expectList
+             , noneVal
+             , stringVal
+             )
 
 
 anyOf :: [Maybe a] -> Maybe a
@@ -110,7 +116,10 @@ mapStmt (ExprSetStmt ns e zs a) = do
             return $ zip ns $ (y ++ (repeat noneVal))
         }
     withNames ms $ execute zs
-mapStmt (BlockSetStmt n xs zs a) = fail "BlockSetStmt are not supported yet"
+mapStmt (BlockSetStmt n xs zs a) = do
+    ys <- execute xs
+    let y = stringVal $ concat ys
+    withNames [(n, y)] $ execute zs
 mapStmt (IncludeStmt x f1 f2 a) = fail "IncludeStmt are not supported yet"
 mapStmt (ImportStmt x n a) = fail "Import Stmt are not supported yet"
 mapStmt (QualifiedImportStmt x ns a) = fail "Qualified Import Stmt are not supported yet"
