@@ -94,8 +94,12 @@ toShow (CallStmt x _) =  ["Call: (" ++ as ++ ") -> " ++ n ++ "(" ++  ps ++ ")"]
           ps = intercalate ", " $ fmap show $ callParameters x
           b = fmap ("\t"++) $ concatMap toShow $ callInput x
 toShow (FilterStmt n sts _) = ["Filter: " ++ n] ++ (fmap ("\t"++) $ concatMap toShow sts)
-toShow (SetStmt ns x sts _) =  ["Set:" ++ (intercalate ", " ns) ++ " <- " ++ show x]
-                            ++ (fmap ("\t"++) $ concatMap toShow sts)
+toShow (ExprSetStmt ns e zs _) =
+    ["ExprSet:" ++ (intercalate ", " ns) ++ " <- " ++ show e] ++
+    (fmap ("\t"++) $ concatMap toShow zs)
+toShow (BlockSetStmt n xs zs _) =
+    ["BlockSet:" ++ n ++ " <- " ++ "some statements" ] ++
+    (fmap ("\t"++) $ concatMap toShow zs)
 toShow (IncludeStmt x a b _) = ["Include: " ++ show x ++ (a' a) ++ (b' b)]
     where a' True = " ignore missing"
           a' False = " don't ignore missing"

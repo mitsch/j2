@@ -197,7 +197,8 @@ data Statement a
     | MacroStmt (MacroStatement a) a
     | CallStmt (CallStatement a) a
     | FilterStmt [Char] [Statement a] a
-    | SetStmt [[Char]] (Expression a) [Statement a] a
+    | ExprSetStmt [[Char]] (Expression a) [Statement a] a
+    | BlockSetStmt [Char] [Statement a] [Statement a] a
     | IncludeStmt (Expression a) Bool (Maybe Bool) a
     | ImportStmt (Expression a) [Char] a
     | QualifiedImportStmt (Expression a) [([Char], Maybe [Char])] a
@@ -215,7 +216,8 @@ instance Functor (Statement) where
     fmap f (MacroStmt x a) = MacroStmt (fmap f x) (f a)
     fmap f (CallStmt x a) = CallStmt (fmap f x) (f a)
     fmap f (FilterStmt n xs a) = FilterStmt n (fmap (fmap f) xs) (f a)
-    fmap f (SetStmt ns e xs a) = SetStmt ns (fmap f e) (fmap (fmap f) xs) (f a)
+    fmap f (ExprSetStmt ns e zs a) = ExprSetStmt ns (fmap f e) (fmap (fmap f) zs) (f a)
+    fmap f (BlockSetStmt n xs zs a) = BlockSetStmt n (fmap (fmap f) xs) (fmap (fmap f) zs) (f a)
     fmap f (IncludeStmt x b c a) = IncludeStmt (fmap f x) b c (f a)
     fmap f (ImportStmt o n a) = ImportStmt (fmap f o) n (f a)
     fmap f (QualifiedImportStmt o ns a) = QualifiedImportStmt (fmap f o) ns (f a)

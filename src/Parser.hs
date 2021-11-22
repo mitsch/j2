@@ -248,10 +248,22 @@ statement = withPos $ choice
         <$> fancyTag "filter" identifier
         <*> many statement
         <*  simpleTag "endfilter"
-    , fancyTag "set" (SetStmt
-            <$> (commaList1 $ identifier <* spaces)
-            <*> (char '=' *> spaces *> expression))
-        <*> many statement
+    , fancyTag "set" (choice
+        [ do { ns <- try (commaList1 (identifier <* spaces) <* char '=')
+             ; spaces
+             ; e <- expression
+             ; return $ return $ ExprSetStmt ns e
+             }
+        , do { n <- identifier
+             ; spaces
+             ; return $ do
+                { xs <- many statement
+                ; simpleTag "endset"
+                ; return $ BlockSetStmt n xs
+                }
+             }
+        ])
+        >>= (\f -> liftA2 ($) f (many statement))
     , fancyTag "include" $ IncludeStmt
         <$> (expression <* spaces)
         <*> option False (True <$ keyword "ignore missing" <* spaces)
