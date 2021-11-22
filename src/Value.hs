@@ -72,7 +72,7 @@ class (F.MonadFail n) => FromValue n a where
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
     expectObject :: a -> n [([Char], a)]
-    expectFunction :: a -> n [Char]
+    expectFunction :: a -> n ([Value] -> IO Value)
 
 asNone :: (FromValue Maybe a) => a -> Maybe ()
 asNone = expectNone
@@ -98,7 +98,7 @@ asObject = expectObject
 asDictionary :: (FromValue Maybe a) => a -> Maybe [(a, a)]
 asDictionary = expectDictionary
 
-asFunction :: (FromValue Maybe a) => a -> Maybe [Char]
+asFunction :: (FromValue Maybe a) => a -> Maybe ([Value] -> IO Value)
 asFunction = expectFunction
 
 class ToValue a where
@@ -110,7 +110,7 @@ class ToValue a where
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
-    functionVal :: [Char] -> a
+    functionVal :: [Char] -> ([a] -> IO a) -> a
 
 
 data Value = NoneVal
@@ -121,7 +121,7 @@ data Value = NoneVal
            | ListVal [Value]
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
-           | FunctionVal [Char]
+           | FunctionVal [Char] ([Value] -> IO Value)
 
 printCompact :: Value -> [Char]
 printCompact NoneVal = "None"
@@ -138,7 +138,7 @@ printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = show k ++ ":" ++ printCompact v
 printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = printCompact k ++ ":" ++ printCompact v
-printCompact (FunctionVal x) = "@" ++ x
+printCompact (FunctionVal n x) = "@" ++ n
 
 
 joinBC :: [[[Char]]] -> [[Char]]
@@ -173,7 +173,7 @@ printPretty (DictionaryVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
     where f (k,v) = let (vh:vt) = printPretty v
                     in (printCompact k ++ ": " ++ vh):(fmap g vt)
           g = ("\t"++)
-printPretty (FunctionVal x) = ["@" ++ x]
+printPretty (FunctionVal n x) = ["@" ++ n]
 
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
@@ -187,7 +187,7 @@ isEqual (ListVal l) (ListVal r) = f l r
           f _ _           = False
 isEqual (DictionaryVal l) (DictionaryVal r) = False
 isEqual (ObjectVal l) (ObjectVal r) = False
-isEqual (FunctionVal l) (FunctionVal r) = l == r
+isEqual (FunctionVal l _) (FunctionVal r _) = l == r
 
 instance Eq (Value) where
     (==) = isEqual
@@ -201,7 +201,7 @@ typeOf (StringVal _)     = StringType
 typeOf (ListVal _)       = ListType
 typeOf (DictionaryVal _) = DictionaryType
 typeOf (ObjectVal _)     = ObjectType
-typeOf (FunctionVal _)   = FunctionType
+typeOf (FunctionVal _ _) = FunctionType
 
 instance (F.MonadFail n) => FromValue n Value where
     expectNone NoneVal = return ()
@@ -220,7 +220,7 @@ instance (F.MonadFail n) => FromValue n Value where
     expectDictionary x = fail $ "Expected Dictionary but got " ++ show (typeOf x)
     expectObject (ObjectVal x) = return x
     expectObject x = fail $ "Expected Object but got " ++ show (typeOf x)
-    expectFunction (FunctionVal x) = return x
+    expectFunction (FunctionVal _ x) = return x
     expectFunction x = fail $ "Expected Function but got " ++ show (typeOf x)
 
 
