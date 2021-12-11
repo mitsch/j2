@@ -5,6 +5,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Value ( Value(..)
+              , Type(..)
               , ToValue
               , FromValue
               , expectNone
@@ -36,11 +37,23 @@ module Value ( Value(..)
               , functionVal
               , printCompact
               , printPretty
+              , typeOf
     ) where
 
 import qualified Control.Monad.Fail as F
 import Data.Ratio
 import Data.List ( intercalate )
+
+data Value = NoneVal
+           | BoolVal Bool
+           | IntegerVal Integer
+           | DecimalVal Rational
+           | StringVal [Char]
+           | ListVal [Value]
+           | ObjectVal [([Char], Value)]
+           | DictionaryVal [(Value, Value)]
+           | FunctionVal [Char] ([Value] -> Either [[Char]] Value)
+           | MacroVal [Char] ([Value] -> Either [[Char]] [[Char]])
 
 data Type = NoneType
           | BoolType
@@ -51,6 +64,7 @@ data Type = NoneType
           | DictionaryType
           | ObjectType
           | FunctionType
+          | MacroType
 
 instance Show Type where
     show NoneType       = "None"
@@ -62,6 +76,7 @@ instance Show Type where
     show DictionaryType = "Dictionary"
     show ObjectType     = "Object"
     show FunctionType   = "Function"
+    show MacroType      = "Macro"
 
 class (F.MonadFail n) => FromValue n a where
     expectNone :: a -> n ()
@@ -72,7 +87,8 @@ class (F.MonadFail n) => FromValue n a where
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
     expectObject :: a -> n [([Char], a)]
-    expectFunction :: a -> n ([Value] -> IO Value)
+    expectFunction :: a -> n ([Value] -> Either [[Char]] Value)
+    expectMacro :: a -> n ([Value] -> Either [[Char]] [[Char]])
 
 asNone :: (FromValue Maybe a) => a -> Maybe ()
 asNone = expectNone
@@ -98,8 +114,12 @@ asObject = expectObject
 asDictionary :: (FromValue Maybe a) => a -> Maybe [(a, a)]
 asDictionary = expectDictionary
 
-asFunction :: (FromValue Maybe a) => a -> Maybe ([Value] -> IO Value)
+asFunction :: (FromValue Maybe a) => a -> Maybe ([Value] -> Either [[Char]] Value)
 asFunction = expectFunction
+
+asMacro :: (FromValue Maybe a) => a -> Maybe ([Value] -> Either [[Char]] [[Char]])
+asMacro = expectMacro
+
 
 class ToValue a where
     noneVal :: a
@@ -110,18 +130,10 @@ class ToValue a where
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
-    functionVal :: [Char] -> ([a] -> IO a) -> a
+    functionVal :: [Char] -> ([a] -> Either [[Char]] a) -> a
+    macroVal :: [Char] -> ([a] -> Either [[Char]] [[Char]]) -> a
 
 
-data Value = NoneVal
-           | BoolVal Bool
-           | IntegerVal Integer
-           | DecimalVal Rational
-           | StringVal [Char]
-           | ListVal [Value]
-           | ObjectVal [([Char], Value)]
-           | DictionaryVal [(Value, Value)]
-           | FunctionVal [Char] ([Value] -> IO Value)
 
 printCompact :: Value -> [Char]
 printCompact NoneVal = "None"
@@ -139,6 +151,7 @@ printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
 printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = printCompact k ++ ":" ++ printCompact v
 printCompact (FunctionVal n x) = "@" ++ n
+printCompact (MacroVal n x) = "@" ++ n
 
 
 joinBC :: [[[Char]]] -> [[Char]]
@@ -174,6 +187,7 @@ printPretty (DictionaryVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
                     in (printCompact k ++ ": " ++ vh):(fmap g vt)
           g = ("\t"++)
 printPretty (FunctionVal n x) = ["@" ++ n]
+printPretty (MacroVal n x) = ["@" ++ n]
 
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
@@ -188,6 +202,8 @@ isEqual (ListVal l) (ListVal r) = f l r
 isEqual (DictionaryVal l) (DictionaryVal r) = False
 isEqual (ObjectVal l) (ObjectVal r) = False
 isEqual (FunctionVal l _) (FunctionVal r _) = l == r
+isEqual (MacroVal l _) (MacroVal r _) = l == r
+isEqual _ _ = False
 
 instance Eq (Value) where
     (==) = isEqual
@@ -202,6 +218,7 @@ typeOf (ListVal _)       = ListType
 typeOf (DictionaryVal _) = DictionaryType
 typeOf (ObjectVal _)     = ObjectType
 typeOf (FunctionVal _ _) = FunctionType
+typeOf (MacroVal _ _) = MacroType
 
 instance (F.MonadFail n) => FromValue n Value where
     expectNone NoneVal = return ()
@@ -222,6 +239,8 @@ instance (F.MonadFail n) => FromValue n Value where
     expectObject x = fail $ "Expected Object but got " ++ show (typeOf x)
     expectFunction (FunctionVal _ x) = return x
     expectFunction x = fail $ "Expected Function but got " ++ show (typeOf x)
+    expectMacro (MacroVal _ x) = return x
+    expectMacro x = fail $ "Expected Macro but got " ++ show (typeOf x)
 
 
 instance ToValue (Value) where
@@ -234,3 +253,4 @@ instance ToValue (Value) where
     dictionaryVal = DictionaryVal
     objectVal = ObjectVal
     functionVal = FunctionVal
+    macroVal = MacroVal
