@@ -360,8 +360,10 @@ instance ( Monad m
         { (c', ca) <- evaluate c
         ; f <- expectFunction c'
         ; xs <- mapM (evaluate . snd) ps
-        ; y <- liftIO $ f $ fmap fst xs
-        ; return (y, a)
+        ; case f $ fmap fst xs of
+            { Left msgs -> fail $ unlines msgs
+            ; Right y -> return (y, a)
+            }
         }
     evaluate (LambdaExpr ns b a) = F.fail "Lambda expression is not supported so far"
     evaluate (ComposeExpr x f a) = F.fail "Compose expression is not supported so far"
