@@ -35,7 +35,8 @@ builtin_capitalize xs = fail $ do_error "capitalize" [[StringType]] xs
 
 builtin_center :: [Value] -> Either [[Char]] Value
 builtin_center [StringVal x] = builtin_center [StringVal x, IntegerVal 80]
-builtin_center [StringVal x, IntegerVal y] = return ""
+builtin_center [StringVal x, IntegerVal y] = return $ StringVal $ a ++ x ++ a
+    where a = flip replicate ' ' $ div (max 0 (y - length x)) 2
 builtin_center xs = fail $ do_error "center" [[StringType], [StringType, IntegerVal]] xs
 
 
