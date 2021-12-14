@@ -39,5 +39,13 @@ builtin_center [StringVal x, IntegerVal y] = return $ StringVal $ a ++ x ++ a
     where a = flip replicate ' ' $ div (max 0 (y - length x)) 2
 builtin_center xs = fail $ do_error "center" [[StringType], [StringType, IntegerVal]] xs
 
-
+builtin_default :: [Value] -> Either [[Char]] Value
+builtin_default [NoneVal, y] = return y
+builtin_default [x, y] = return x
+builtin_default [NoneVal, y, BoolVal _] = return y
+builtin_default [x, y, BoolVal z] = return $ case (testValue x) || not z of
+    { True -> x
+    ; False -> y
+    }
+builtin_default xs = fail $ do_error "default" [[], []] xs
 
