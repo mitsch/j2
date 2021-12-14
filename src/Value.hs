@@ -17,6 +17,7 @@ module Value ( Value(..)
               , expectDictionary
               , expectObject
               , expectFunction
+              , testValue
               , asNone
               , asBool
               , asInteger
@@ -89,6 +90,7 @@ class (F.MonadFail n) => FromValue n a where
     expectObject :: a -> n [([Char], a)]
     expectFunction :: a -> n ([Value] -> Either [[Char]] Value)
     expectMacro :: a -> n ([Value] -> Either [[Char]] [[Char]])
+    testValue :: a -> Bool
 
 asNone :: (FromValue Maybe a) => a -> Maybe ()
 asNone = expectNone
@@ -241,6 +243,16 @@ instance (F.MonadFail n) => FromValue n Value where
     expectFunction x = fail $ "Expected Function but got " ++ show (typeOf x)
     expectMacro (MacroVal _ x) = return x
     expectMacro x = fail $ "Expected Macro but got " ++ show (typeOf x)
+    testValue NoneVal = False
+    testValue (BoolVal x) = x
+    testValue (IntegerVal x) = x /= 0
+    testValue (DecimalVal x) = (numerator x) /= 0
+    testValue (StringVal x) = (length x) /= 0
+    testValue (ListVal x) = (length x) /= 0
+    testValue (DictionaryVal x) = (length x) /= 0
+    testValue (ObjectVal x) = (length x) /= 0
+    testValue (FunctionVal _ _) = True
+    testValue (MacroVal _ _) = True
 
 
 instance ToValue (Value) where
