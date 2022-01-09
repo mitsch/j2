@@ -83,15 +83,13 @@ buildin_center = callBuildin f
     where f x n = let a = flip replicate ' ' $ div (max 0 (n - length x)) 2
                   in a ++ x ++ a
 
-builtin_default :: [Value] -> Either [[Char]] Value
-builtin_default [NoneVal, y] = return y
-builtin_default [x, y] = return x
-builtin_default [NoneVal, y, BoolVal _] = return y
-builtin_default [x, y, BoolVal z] = return $ case (testValue x) || not z of
-    { True -> x
-    ; False -> y
-    }
-builtin_default xs = fail $ do_error "default" [[], []] xs
+buildin_default = callBuildin f
+                $ param "value" Nothing id
+                $ param "default_value" (Just $ StringVal "") id
+                $ param "boolean" (Just False) expectBool
+                $ ret id
+    where f x d True = case testBool x of { True -> x; False -> d}
+          f x d False = case isNone x of { True -> d; False -> x}
 
 builtin_dictsort :: [Value] -> Either [[Char]] Value
 builtin_dictsort =
