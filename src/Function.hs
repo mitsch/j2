@@ -91,8 +91,14 @@ buildin_default = callBuildin f
     where f x d True = case testBool x of { True -> x; False -> d}
           f x d False = case isNone x of { True -> d; False -> x}
 
-builtin_dictsort :: [Value] -> Either [[Char]] Value
-builtin_dictsort =
+buildin_dictsort = callBuildin f
+                 $ param "value" Nothing expectDictionary
+                 $ param "case_sensitive" (Just False) expectBool
+                 $ param "by" (Just ()) (const $ pure ())
+                 $ param "reverse" (Just False) expectBool
+                 $ ret DictionaryVal
+    where f :: [(Value, Value)] -> Bool -> () -> Bool -> [(Value, Value)]
+          f xs c _ r = xs
 
 builtin_escape :: [Value] -> Either [[Char]] Value
 builtin_escape [StringVal x] = return $ StringVal $ concatMap f x
