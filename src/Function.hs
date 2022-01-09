@@ -64,8 +64,7 @@ _batch xs n d = f xs
     where f [] = []
           f xs = (take n $ take n xs ++ (maybe [] repeat $ d)):(f $ drop n xs)
 
-builtin_batch :: [Value] -> Either [[Char]] Value
-builtin_batch = callBuildin _batch
+buildin_batch = callBuildin _batch
               $ param "value" Nothing ()
               $ param "linecount" Nothing expectInteger
               $ param "fill_with" (Just Nothing) (Just)
