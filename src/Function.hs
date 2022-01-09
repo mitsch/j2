@@ -100,17 +100,24 @@ buildin_dictsort = callBuildin f
     where f :: [(Value, Value)] -> Bool -> () -> Bool -> [(Value, Value)]
           f xs c _ r = xs
 
-builtin_escape :: [Value] -> Either [[Char]] Value
-builtin_escape [StringVal x] = return $ StringVal $ concatMap f x
+buildin_escape = callBuildin (concatMap f)
+               $ param "value" Nothing (\v -> expectString v <|> g v)
+               $ ret StringVal
     where f '&' = "&amp;"
           f '<' = "&lt;"
           f '>' = "&gt;"
           f '\'' = "&#39;"
           f '\"' = "&quot;"
           f x = [x]
-builtin_escape [ObjectVal xs] = maybe (fail e) return $ lookup "__html__" xs
-    where e = ["missing attribute \"__html__\""]
-builtin_escape xs = fail $ do_error "ecape" [[StringType], [ObjectType]] xs
+          g v = do { o <- expectObject v
+                   ; w <- case lookup "__html__" o of
+                            { Nothing -> fail $ "Cannot find a method \"__html__\""
+                            ; Just x -> return x
+                            }
+                   ; h <- expectFunction w
+                   ; y <- h [] []
+                   ; expectString y
+                   }
 
 builtin_filesizeformat :: 
 
