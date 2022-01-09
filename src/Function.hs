@@ -70,11 +70,11 @@ buildin_batch = callBuildin _batch
               $ param "fill_with" (Just Nothing) (Just)
               $ ret ListVal
 
-builtin_capitalize :: [Value] -> Either [[Char]] Value
-builtin_capitalize [StringVal x] = return $ StringVal $ f x
+buildin_capitalize = callBuildin f
+                   $ param "s" Nothing expectString
+                   $ ret StringVal
     where f [] = []
           f (x:xs) = (toUpper x):xs
-builtin_capitalize xs = fail $ do_error "capitalize" [[StringType]] xs
 
 builtin_center :: [Value] -> Either [[Char]] Value
 builtin_center [StringVal x] = builtin_center [StringVal x, IntegerVal 80]
