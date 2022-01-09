@@ -76,11 +76,12 @@ buildin_capitalize = callBuildin f
     where f [] = []
           f (x:xs) = (toUpper x):xs
 
-builtin_center :: [Value] -> Either [[Char]] Value
-builtin_center [StringVal x] = builtin_center [StringVal x, IntegerVal 80]
-builtin_center [StringVal x, IntegerVal y] = return $ StringVal $ a ++ x ++ a
-    where a = flip replicate ' ' $ div (max 0 (y - length x)) 2
-builtin_center xs = fail $ do_error "center" [[StringType], [StringType, IntegerVal]] xs
+buildin_center = callBuildin f
+               $ param "value" Nothing expectString
+               $ param "width" (Just 80) expectInteger
+               $ ret StringVal
+    where f x n = let a = flip replicate ' ' $ div (max 0 (n - length x)) 2
+                  in a ++ x ++ a
 
 builtin_default :: [Value] -> Either [[Char]] Value
 builtin_default [NoneVal, y] = return y
