@@ -23,7 +23,10 @@ overloadBuildin :: ([Value] -> [([Char], Value)] -> Either [Char] Value)
 overloadBuildin a b = \os ns -> (a os ns) <|> (b os ns)
 
 ret :: (a -> Value) -> Buildin a
-ret f = Buildin $ \x os ns -> pure $ f x
+ret f = Buildin $ \x _ _ -> pure $ f x
+
+ret' :: (a -> Either [Char] Value) -> Buildin a
+ret' f = Buildin $ \x _ _ -> f a
 
 param :: [Char] -> Maybe a -> (Value -> Either [Char] a) -> Buildin b -> Buildin (a -> b)
 param n d f r = Buildin $ \g oss ns -> case oss of
@@ -50,11 +53,11 @@ buildin_abs = overloadBuildin _int _float
                  $ param "x" Nothing expectDecimal
                  $ ret DecimalVal
 
-
-builtin_attr :: [Value] -> Either [[Char]] Value
-builtin_attr [ObjectVal xs, StringVal y] = maybe (fail esmg) return $ lookup y xs
-    where esmg = "No attribute named " ++ show y ++ " in object"
-builtin_attr xs = fail $ do_error "attr" [[ObjectType, StringType]] xs
+buildin_attr = callBuildin lookup
+             $ param "obj" Nothing expectObject
+             $ param "str" Nothing expectString
+             $ ret' (maybe (Left emsg) Right)
+    where emsg = "Cannot find attribute in object"
 
 builtin_batch :: [Value] -> Either [[Char]] Value
 builtin_batch
