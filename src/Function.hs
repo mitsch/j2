@@ -119,7 +119,34 @@ buildin_escape = callBuildin (concatMap f)
                    ; expectString y
                    }
 
-builtin_filesizeformat :: 
+buildin_filesizeformat = callBuildin f
+                       $ param "value" Nothing (\x -> expectInteger x <|> expectString x >>= g)
+                       $ param "binary" (Just False) expectBool
+                       $ ret StringVal
+    where f n False = maybe (show n ++ "B") id
+                    $ listToMaybe
+                    $ reverse
+                    $ catMaybes
+                    $ fmap (\(s,p) -> case n >= (10^p)) of
+                        { True -> (show $ div n $ 10^p) ++ p
+                        ; False -> Nothing
+                        })
+                    $ zip ["KB", "MB", "GB", "TB", "PB", "EB", "ZB"]
+                    $ iterate 3 (3+)
+          f n True = maybe (show n ++ "B") id
+                   $ listToMaybe
+                   $ reverse
+                   $ catMaybes
+                   $ fmap (\(s,p) -> case n >= (2^p)) of
+                        { True -> (show $ div n $ 2^p) ++ p
+                        ; False -> Nothing
+                        })
+                   $ zip ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB"]
+                   $ iterate 10 (10+)
+          g :: [Char] -> Either [Char] Integer
+          g = maybe (Left $ "Cannot read Integer") (Right . fst)
+            . listToMaybe
+            . reads
 
 builtin_first = 
 
