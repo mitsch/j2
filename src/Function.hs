@@ -127,7 +127,7 @@ buildin_filesizeformat = callBuildin f
                     $ listToMaybe
                     $ reverse
                     $ catMaybes
-                    $ fmap (\(s,p) -> case n >= (10^p)) of
+                    $ fmap (\(s,p) -> case n >= (10^p) of
                         { True -> (show $ div n $ 10^p) ++ p
                         ; False -> Nothing
                         })
@@ -137,7 +137,7 @@ buildin_filesizeformat = callBuildin f
                    $ listToMaybe
                    $ reverse
                    $ catMaybes
-                   $ fmap (\(s,p) -> case n >= (2^p)) of
+                   $ fmap (\(s,p) -> case n >= (2^p) of
                         { True -> (show $ div n $ 2^p) ++ p
                         ; False -> Nothing
                         })
