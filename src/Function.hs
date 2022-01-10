@@ -148,7 +148,9 @@ buildin_filesizeformat = callBuildin f
             . listToMaybe
             . reads
 
-builtin_first = 
+buildin_first = callBuildin listToMaybe
+              $ param "seq" Nothing expectList
+              $ ret' (either (Left "Empty List") Right)
 
 
 
