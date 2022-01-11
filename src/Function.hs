@@ -7,6 +7,7 @@ module Function ( abs
 import Value ( Value, Type, toType )
 import Control.Monad.IO
 import qualified Prelude ( abs )
+import Text.Read ( readMaybe )
 
 
 data Buildin a = Buildin
@@ -152,6 +153,13 @@ buildin_first = callBuildin listToMaybe
               $ param "seq" Nothing expectList
               $ ret' (either (Left "Empty List") Right)
 
+buildin_float = callBuildin f
+              $ param "value" Nothing g
+              $ param "default" (Just (0%0)) expectDecimal
+              $ ret DecimalVal
+    where g :: Value -> Either [Char] (Maybe Rational)
+          g v = asDecimal v <|> ((%1) <$> asInteger v) <|> (asString v >>= readMaybe)
+          f v d = maybe d Right v
 
 
 _indent :: [Char] -> Int -> Bool -> Bool -> [Char]
