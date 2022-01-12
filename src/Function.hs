@@ -161,6 +161,25 @@ buildin_float = callBuildin f
           g v = asDecimal v <|> ((%1) <$> asInteger v) <|> (asString v >>= readMaybe)
           f v d = maybe d Right v
 
+buildin_forceescape = callBuildin (either (concatMap f) id)
+                    $ param "value" Nothing (\x -> (Left <$> expectString x) <|>
+                                                   (Right <$> g x))
+                    $ ret StringVal
+    where g v = do { obj <- expectObject v
+                   ; mbr <- case lookup "__html__" obj of
+                    { Nothing -> fail "Cannot find method \"__html__\""
+                    ; Just x -> return x
+                    }
+                   ; fun <- expectFunction mbr
+                   ; res <- fun [] []
+                   ; expectString res
+                   }
+          f '&' = "&amp;"
+          f '<' = "&lt;"
+          f '>' = "&gt;"
+          f '\'' = "&#39;"
+          f '\"' = "&quot;"
+          f x = [x]
 
 _indent :: [Char] -> Int -> Bool -> Bool -> [Char]
 _indent s w True True = unlines $ fmap (f . g) $ lines s
