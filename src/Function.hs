@@ -181,6 +181,8 @@ buildin_forceescape = callBuildin (either (concatMap f) id)
           f '\"' = "&quot;"
           f x = [x]
 
+-- TODO implementation of buildin_format
+
 _indent :: [Char] -> Int -> Bool -> Bool -> [Char]
 _indent s w True True = unlines $ fmap (f . g) $ lines s
     where g = dropWhile isSpaces
