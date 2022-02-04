@@ -11,7 +11,7 @@ module Value ( Value(..)
               , expectNone
               , expectBool
               , expectInteger
-              , expectDecimal
+              , expectFloat
               , expectString
               , expectList
               , expectDictionary
@@ -21,7 +21,7 @@ module Value ( Value(..)
               , asNone
               , asBool
               , asInteger
-              , asDecimal
+              , asFloat
               , asString
               , asList
               , asDictionary
@@ -30,7 +30,7 @@ module Value ( Value(..)
               , noneVal
               , boolVal
               , integerVal
-              , decimalVal
+              , floatVal
               , stringVal
               , listVal
               , dictionaryVal
@@ -48,7 +48,7 @@ import Data.List ( intercalate )
 data Value = NoneVal
            | BoolVal Bool
            | IntegerVal Integer
-           | DecimalVal Rational
+           | FloatVal Float
            | StringVal [Char]
            | ListVal [Value]
            | ObjectVal [([Char], Value)]
@@ -59,7 +59,7 @@ data Value = NoneVal
 data Type = NoneType
           | BoolType
           | IntegerType
-          | DecimalType
+          | FloatType
           | StringType
           | ListType
           | DictionaryType
@@ -71,7 +71,7 @@ instance Show Type where
     show NoneType       = "None"
     show BoolType       = "Bool"
     show IntegerType    = "Integer"
-    show DecimalType    = "Decimal"
+    show FloatType      = "Float"
     show StringType     = "String"
     show ListType       = "List"
     show DictionaryType = "Dictionary"
@@ -83,7 +83,7 @@ class (F.MonadFail n) => FromValue n a where
     expectNone :: a -> n ()
     expectBool :: a -> n Bool
     expectInteger :: a -> n Integer
-    expectDecimal :: a -> n Rational
+    expectFloat :: a -> n Float
     expectString :: a -> n [Char]
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
@@ -101,8 +101,8 @@ asBool = expectBool
 asInteger :: (FromValue Maybe a) => a -> Maybe Integer
 asInteger = expectInteger
 
-asDecimal :: (FromValue Maybe a) => a -> Maybe Rational
-asDecimal = expectDecimal
+asFloat :: (FromValue Maybe a) => a -> Maybe Float
+asFloat = expectFloat
 
 asString :: (FromValue Maybe a) => a -> Maybe [Char]
 asString = expectString
@@ -127,7 +127,7 @@ class ToValue a where
     noneVal :: a
     boolVal :: Bool -> a
     integerVal :: Integer -> a
-    decimalVal :: Rational -> a
+    floatVal :: Float -> a
     stringVal :: [Char] -> a
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
@@ -142,9 +142,7 @@ printCompact NoneVal = "None"
 printCompact (BoolVal True) = "True"
 printCompact (BoolVal False) = "False"
 printCompact (IntegerVal x) = show x
-printCompact (DecimalVal x) = show $ n / d
-    where n = fromIntegral $ numerator x
-          d = fromIntegral $ denominator x
+printCompact (FloatVal x) = show x
 printCompact (StringVal x) = show x
 printCompact (ListVal xs) = "[" ++ (intercalate "," $ fmap f xs) ++ "]"
     where f = printCompact
@@ -173,9 +171,7 @@ printPretty NoneVal = ["None"]
 printPretty (BoolVal True) = ["True"]
 printPretty (BoolVal False) = ["False"]
 printPretty (IntegerVal x) = [show x]
-printPretty (DecimalVal x) = [show $ n / d]
-    where n = fromIntegral $ numerator x
-          d = fromIntegral $ denominator x
+printPretty (FloatVal x) = [show x]
 printPretty (StringVal x) = [show x]
 printPretty (ListVal xs) = ["["] ++ (fmap g $ joinBC $ fmap f xs) ++ ["]"]
     where f = printPretty
@@ -195,7 +191,7 @@ isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
 isEqual (BoolVal l) (BoolVal r) = l == r
 isEqual (IntegerVal l) (IntegerVal r) = l == r
-isEqual (DecimalVal l) (DecimalVal r) = l == r
+isEqual (FloatVal l) (FloatVal r) = l == r
 isEqual (StringVal l) (StringVal r) = l == r
 isEqual (ListVal l) (ListVal r) = f l r
     where f (l:ls) (r:rs) = isEqual l r && f ls rs
@@ -214,13 +210,13 @@ typeOf :: Value -> Type
 typeOf NoneVal           = NoneType
 typeOf (BoolVal _)       = BoolType
 typeOf (IntegerVal _)    = IntegerType
-typeOf (DecimalVal _)    = DecimalType
+typeOf (FloatVal _)      = FloatType
 typeOf (StringVal _)     = StringType
 typeOf (ListVal _)       = ListType
 typeOf (DictionaryVal _) = DictionaryType
 typeOf (ObjectVal _)     = ObjectType
 typeOf (FunctionVal _ _) = FunctionType
-typeOf (MacroVal _ _) = MacroType
+typeOf (MacroVal _ _)    = MacroType
 
 instance (F.MonadFail n) => FromValue n Value where
     expectNone NoneVal = return ()
@@ -229,8 +225,8 @@ instance (F.MonadFail n) => FromValue n Value where
     expectBool x = fail $ "Expected Bool but got " ++ show (typeOf x)
     expectInteger (IntegerVal x) = return x
     expectInteger x = fail $ "Expected Integer but got " ++ show (typeOf x)
-    expectDecimal (DecimalVal x) = return x
-    expectDecimal x = fail $ "Expected Decimal but got " ++ show (typeOf x)
+    expectFloat (FloatVal x) = return x
+    expectFloat x = fail $ "Expected Float but got " ++ show (typeOf x)
     expectString (StringVal x) = return x
     expectString x = fail $ "Expected String but got " ++ show (typeOf x)
     expectList (ListVal x) = return x
@@ -246,7 +242,7 @@ instance (F.MonadFail n) => FromValue n Value where
     testValue NoneVal = False
     testValue (BoolVal x) = x
     testValue (IntegerVal x) = x /= 0
-    testValue (DecimalVal x) = (numerator x) /= 0
+    testValue (FloatVal x) = x /= 0
     testValue (StringVal x) = (length x) /= 0
     testValue (ListVal x) = (length x) /= 0
     testValue (DictionaryVal x) = (length x) /= 0
@@ -256,13 +252,13 @@ instance (F.MonadFail n) => FromValue n Value where
 
 
 instance ToValue (Value) where
-    noneVal = NoneVal
-    boolVal = BoolVal
-    integerVal = IntegerVal
-    decimalVal = DecimalVal
-    stringVal = StringVal
-    listVal = ListVal
+    noneVal       = NoneVal
+    boolVal       = BoolVal
+    integerVal    = IntegerVal
+    floatVal      = FloatVal
+    stringVal     = StringVal
+    listVal       = ListVal
     dictionaryVal = DictionaryVal
-    objectVal = ObjectVal
-    functionVal = FunctionVal
-    macroVal = MacroVal
+    objectVal     = ObjectVal
+    functionVal   = FunctionVal
+    macroVal      = MacroVal

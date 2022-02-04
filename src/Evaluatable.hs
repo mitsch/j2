@@ -10,7 +10,7 @@ import Value ( Value(..)
              , expectNone
              , expectBool
              , expectInteger
-             , expectDecimal
+             , expectFloat
              , expectString
              , expectList
              , expectDictionary
@@ -19,7 +19,7 @@ import Value ( Value(..)
              , noneVal
              , boolVal
              , integerVal
-             , decimalVal
+             , floatVal
              , stringVal
              , listVal
              , dictionaryVal
@@ -44,7 +44,7 @@ toBool x = maybe False id $ anyOf
     [ False           <$  expectNone x
     , id              <$> expectBool x
     , (0/=)           <$> expectInteger x
-    , (0/=).numerator <$> expectDecimal x
+    , (0/=)           <$> expectFloat x
     , (not.null)      <$> expectString x
     , (not.null)      <$> expectList x
     , (not.null)      <$> expectObject x
@@ -63,7 +63,7 @@ instance ( Monad m
     evaluate (NoneExpr a) = return (noneVal, a)
     evaluate (BoolExpr b a) = return (boolVal b, a)
     evaluate (IntegerExpr i a) = return (integerVal i, a)
-    evaluate (NumberExpr f a) = return (decimalVal f, a)
+    evaluate (NumberExpr f a) = return (floatVal f, a)
     evaluate (StringExpr s a) = return (stringVal s, a)
     evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
     evaluate (ListExpr es a) = do
@@ -78,7 +78,7 @@ instance ( Monad m
         { (e', ea) <- evaluate e
         ; n <- anyOf
             [ (integerVal . negate) <$> expectInteger e'
-            , (decimalVal . negate) <$> expectDecimal e'
+            , (floatVal . negate)   <$> expectFloat e'
             ]
         ; return (n, a)
         }
@@ -88,7 +88,7 @@ instance ( Monad m
             [ True            <$  expectNone e'
             , not             <$> expectBool e'
             , (0==)           <$> expectInteger e'
-            , (0==).numerator <$> expectDecimal e'
+            , (0==)           <$> expectFloat e'
             , null            <$> expectString e'
             , null            <$> expectList e'
             , null            <$> expectObject e'
@@ -133,15 +133,15 @@ instance ( Monad m
             [ (integerVal.).(+)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(+)
-                <$> expectDecimal l'
-                <*> expectDecimal r'
-            , (decimalVal.).(+)
-                <$> (toRational <$> expectInteger l')
-                <*> expectDecimal r'
-            , (decimalVal.).(+)
-                <$> expectDecimal l'
-                <*> (toRational <$> expectInteger r')
+            , (floatVal.).(+)
+                <$> expectFloat l'
+                <*> expectFloat r'
+            , (floatVal.).(+)
+                <$> (fromIntegral <$> expectInteger l')
+                <*> expectFloat r'
+            , (floatVal.).(+)
+                <$> expectFloat l'
+                <*> (fromIntegral <$> expectInteger r')
             ]
         ; return (x, a)
         }
@@ -152,15 +152,15 @@ instance ( Monad m
             [ (integerVal.).(-)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(-)
-                <$> expectDecimal l'
-                <*> expectDecimal r'
-            , (decimalVal.).(-)
-                <$> (toRational <$> expectInteger l')
-                <*> expectDecimal r'
-            , (decimalVal.).(-)
-                <$> expectDecimal l'
-                <*> (toRational <$> expectInteger r')
+            , (floatVal.).(-)
+                <$> expectFloat l'
+                <*> expectFloat r'
+            , (floatVal.).(-)
+                <$> (fromIntegral <$> expectInteger l')
+                <*> expectFloat r'
+            , (floatVal.).(-)
+                <$> expectFloat l'
+                <*> (fromIntegral <$> expectInteger r')
             ]
             ; return (x, a)
         }
@@ -171,24 +171,24 @@ instance ( Monad m
             [ (integerVal.).(*)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(*)
-                <$> expectDecimal l'
-                <*> expectDecimal r'
-            , (decimalVal.).(*)
-                <$> (toRational <$> expectInteger l')
-                <*> expectDecimal r'
-            , (decimalVal.).(*)
-                <$> expectDecimal l'
-                <*> (toRational <$> expectInteger r')
+            , (floatVal.).(*)
+                <$> expectFloat l'
+                <*> expectFloat r'
+            , (floatVal.).(*)
+                <$> (fromIntegral <$> expectInteger l')
+                <*> expectFloat r'
+            , (floatVal.).(*)
+                <$> expectFloat l'
+                <*> (fromIntegral <$> expectInteger r')
             ]
         ; return (x, a)
         }
     evaluate (DivideExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ;       (\lh rh -> (decimalVal $ lh / rh, a))
-            <$> anyOf [ toRational <$> expectInteger l', expectDecimal l']
-            <*> anyOf [ toRational <$> expectInteger r', expectDecimal r']
+        ;       (\lh rh -> (floatVal $ lh / rh, a))
+            <$> anyOf [ fromIntegral <$> expectInteger l', expectFloat l']
+            <*> anyOf [ fromIntegral <$> expectInteger r', expectFloat r']
         }
     evaluate (IntegralDivideExpr l r a) = do
         { (l', la) <- evaluate l
@@ -199,14 +199,14 @@ instance ( Monad m
                 <$> expectInteger l'
                 <*> expectInteger r'
             , ((integerVal . floor) .).(/)
-                <$> (toRational <$> expectInteger l')
-                <*> expectDecimal r'
+                <$> (fromIntegral <$> expectInteger l')
+                <*> expectFloat r'
             , ((integerVal . floor) .).(/)
-                <$> expectDecimal l'
-                <*> (toRational <$> expectInteger r')
+                <$> expectFloat l'
+                <*> (fromIntegral <$> expectInteger r')
             , ((integerVal . floor) .).(/)
-                <$> expectDecimal l'
-                <*> expectDecimal r'
+                <$> expectFloat l'
+                <*> expectFloat r'
             ]
         ; return (x, a)
         }
@@ -218,15 +218,15 @@ instance ( Monad m
             [ (integerVal.).(mod)
                 <$> expectInteger l'
                 <*> expectInteger r'
-            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
-                <$> expectDecimal l'
-                <*> (toRational <$> expectInteger r')
-            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
-                <$> (toRational <$> expectInteger l')
-                <*> expectDecimal r'
-            , (decimalVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
-                <$> expectDecimal l'
-                <*> expectDecimal r'
+            , (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> expectFloat l'
+                <*> (fromIntegral <$> expectInteger r')
+            , (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> (fromIntegral <$> expectInteger l')
+                <*> expectFloat r'
+            , (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+                <$> expectFloat l'
+                <*> expectFloat r'
             ]
         ; return (x, a)
         }
@@ -245,9 +245,9 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- anyOf
             [ (<) <$> expectInteger l' <*> expectInteger r'
-            , (<) <$> expectDecimal l' <*> expectDecimal r'
-            , (<) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
-            , (<) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
+            , (<) <$> expectFloat l' <*> expectFloat r'
+            , (<) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r'
+            , (<) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r')
             , (<) <$> expectString l' <*> expectString r'
             , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <"
             , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <"
@@ -259,9 +259,9 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- anyOf
             [ (<=) <$> expectInteger l' <*> expectInteger r'
-            , (<=) <$> expectDecimal l' <*> expectDecimal r'
-            , (<=) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
-            , (<=) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
+            , (<=) <$> expectFloat l' <*> expectFloat r'
+            , (<=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r'
+            , (<=) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r')
             , (<=) <$> expectString l' <*> expectString r'
             , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <="
             , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <="
@@ -273,9 +273,9 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- anyOf
             [ (>) <$> expectInteger l' <*> expectInteger r'
-            , (>) <$> expectDecimal l' <*> expectDecimal r'
-            , (>) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
-            , (>) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
+            , (>) <$> expectFloat l' <*> expectFloat r'
+            , (>) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r'
+            , (>) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r')
             , (>) <$> expectString l' <*> expectString r'
             , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >"
             , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >"
@@ -287,9 +287,9 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- anyOf
             [ (>=) <$> expectInteger l' <*> expectInteger r'
-            , (>=) <$> expectDecimal l' <*> expectDecimal r'
-            , (>=) <$> (toRational <$> expectInteger l') <*> expectDecimal r'
-            , (>=) <$> expectDecimal l' <*> (toRational <$> expectInteger r')
+            , (>=) <$> expectFloat l' <*> expectFloat r'
+            , (>=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r'
+            , (>=) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r')
             , (>=) <$> expectString l' <*> expectString r'
             , ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >="
             , ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >="
@@ -346,7 +346,7 @@ instance ( Monad m
             [ False           <$  expectNone c'
             , id              <$> expectBool c'
             , (0/=)           <$> expectInteger c'
-            , (0/=).numerator <$> expectDecimal c'
+            , (0/=)           <$> expectFloat c'
             , not.null        <$> expectString c'
             , not.null        <$> expectList c'
             , not.null        <$> expectObject c'

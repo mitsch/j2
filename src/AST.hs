@@ -18,7 +18,7 @@ import Value
     ( expectNone
     , expectBool
     , expectInteger
-    , expectDecimal
+    , expectFloat
     , expectString
     , expectList
     , expectDictionary
@@ -29,7 +29,7 @@ import Value
     , noneVal
     , boolVal
     , integerVal
-    , decimalVal
+    , floatVal
     , stringVal
     , listVal
     , dictionaryVal
@@ -50,7 +50,7 @@ data Expression a
     = NoneExpr a
     | BoolExpr Bool a
     | IntegerExpr Integer a
-    | NumberExpr Rational a
+    | NumberExpr Float a
     | StringExpr[Char] a
     | SymbolExpr [Char] a
     | ListExpr [Expression a] a

@@ -20,6 +20,7 @@ import AST
     , CallStatement(..)
     , BlockStatement(..))
 import Control.Applicative (liftA2)
+import GHC.Float (rationalToFloat)
 
 
 commaList :: Stream s m Char => ParsecT s u m a -> ParsecT s u m [a]
@@ -75,7 +76,7 @@ literalString = between (char '\"') (char '\"')
               esc_from = "\'\\nrtbf"
               esc_to = "\'\\\n\r\t\b\f"
 
-literalNumber :: Stream s m Char => ParsecT s u m (Either Integer Rational)
+literalNumber :: Stream s m Char => ParsecT s u m (Either Integer Float)
 literalNumber =   f
               <$> ((toInteger . read) <$> many1 digit)
               <*> optionMaybe (oneOf "eE" *> many1 digit)
@@ -84,8 +85,10 @@ literalNumber =   f
               f a b c = Right $ g a (maybe 0 (fromIntegral . read) b)
                                     (maybe 0 length b)
                                     (maybe 0 (fromIntegral . read) c)
-              g a b c d = toInteger ((a * 10 ^ c + b) * 10 ^ (max 0 $ d - c))
-                        % toInteger (10 ^ (max 0 $ c - d))
+              g a b c d = let
+                num_ = ((a * 10 ^ c + b) * 10 ^ (max 0 $ d - c))
+                den_ = (10 ^ (max 0 $ c - d))
+                in rationalToFloat num_ den_
 
 ---
 
