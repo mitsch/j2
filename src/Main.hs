@@ -25,6 +25,7 @@ import Value (Value(..))
 import Exception
 import Evaluatable ( Evaluatable, evaluate )
 import Resolver ( runResolverT )
+import Function ( buildin_abs )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
