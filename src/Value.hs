@@ -5,45 +5,51 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Value ( Value(..)
-              , Type(..)
-              , ToValue
-              , FromValue
-              , expectNone
-              , expectBool
-              , expectInteger
-              , expectFloat
-              , expectString
-              , expectList
-              , expectDictionary
-              , expectObject
-              , expectFunction
-              , testValue
-              , asNone
-              , asBool
-              , asInteger
-              , asFloat
-              , asString
-              , asList
-              , asDictionary
-              , asObject
-              , asFunction
-              , noneVal
-              , boolVal
-              , integerVal
-              , floatVal
-              , stringVal
-              , listVal
-              , dictionaryVal
-              , objectVal
-              , functionVal
-              , printCompact
-              , printPretty
-              , typeOf
+             , Function (..)
+             , Type(..)
+             , ToValue
+             , FromValue
+             , expectNone
+             , expectBool
+             , expectInteger
+             , expectFloat
+             , expectString
+             , expectList
+             , expectDictionary
+             , expectObject
+             , expectFunction
+             , testValue
+             , asNone
+             , asBool
+             , asInteger
+             , asFloat
+             , asString
+             , asList
+             , asDictionary
+             , asObject
+             , asFunction
+             , noneVal
+             , boolVal
+             , integerVal
+             , floatVal
+             , stringVal
+             , listVal
+             , dictionaryVal
+             , objectVal
+             , functionVal
+             , printCompact
+             , printPretty
+             , typeOf
     ) where
 
 import qualified Control.Monad.Fail as F
 import Data.Ratio
 import Data.List ( intercalate )
+
+
+data Function a = Function {
+    runFunction :: [a] -> [([Char], a)] -> Either [Char] a
+}
 
 data Value = NoneVal
            | BoolVal Bool
@@ -53,7 +59,7 @@ data Value = NoneVal
            | ListVal [Value]
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
-           | FunctionVal [Char] ([Value] -> Either [[Char]] Value)
+           | FunctionVal [Char] (Function Value)
            | MacroVal [Char] ([Value] -> Either [[Char]] [[Char]])
 
 data Type = NoneType
@@ -88,7 +94,7 @@ class (F.MonadFail n) => FromValue n a where
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
     expectObject :: a -> n [([Char], a)]
-    expectFunction :: a -> n ([Value] -> Either [[Char]] Value)
+    expectFunction :: a -> n (Function a)
     expectMacro :: a -> n ([Value] -> Either [[Char]] [[Char]])
     testValue :: a -> Bool
 
@@ -116,7 +122,7 @@ asObject = expectObject
 asDictionary :: (FromValue Maybe a) => a -> Maybe [(a, a)]
 asDictionary = expectDictionary
 
-asFunction :: (FromValue Maybe a) => a -> Maybe ([Value] -> Either [[Char]] Value)
+asFunction :: (FromValue Maybe a) => a -> Maybe (Function a)
 asFunction = expectFunction
 
 asMacro :: (FromValue Maybe a) => a -> Maybe ([Value] -> Either [[Char]] [[Char]])
@@ -132,7 +138,7 @@ class ToValue a where
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
-    functionVal :: [Char] -> ([a] -> Either [[Char]] a) -> a
+    functionVal :: [Char] -> (Function a) -> a
     macroVal :: [Char] -> ([a] -> Either [[Char]] [[Char]]) -> a
 
 
@@ -150,8 +156,8 @@ printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = show k ++ ":" ++ printCompact v
 printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = printCompact k ++ ":" ++ printCompact v
-printCompact (FunctionVal n x) = "@" ++ n
-printCompact (MacroVal n x) = "@" ++ n
+printCompact (FunctionVal n _) = "@" ++ n
+printCompact (MacroVal n _) = "@" ++ n
 
 
 joinBC :: [[[Char]]] -> [[Char]]
@@ -184,8 +190,8 @@ printPretty (DictionaryVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
     where f (k,v) = let (vh:vt) = printPretty v
                     in (printCompact k ++ ": " ++ vh):(fmap g vt)
           g = ("\t"++)
-printPretty (FunctionVal n x) = ["@" ++ n]
-printPretty (MacroVal n x) = ["@" ++ n]
+printPretty (FunctionVal n _) = ["@" ++ n]
+printPretty (MacroVal n _) = ["@" ++ n]
 
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
