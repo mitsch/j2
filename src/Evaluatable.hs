@@ -7,6 +7,7 @@ module Evaluatable ( Evaluatable, evaluate) where
 
 import AST ( Expression(..), Statement(..) )
 import Value ( Value(..)
+             , Function(..)
              , expectNone
              , expectBool
              , expectInteger
@@ -360,8 +361,8 @@ instance ( Monad m
         { (c', ca) <- evaluate c
         ; f <- expectFunction c'
         ; xs <- mapM (evaluate . snd) ps
-        ; case f $ fmap fst xs of
-            { Left msgs -> fail $ unlines msgs
+        ; case (runFunction f) (fmap fst xs) [] of
+            { Left msg -> fail msg
             ; Right y -> return (y, a)
             }
         }
