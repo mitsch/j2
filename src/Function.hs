@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Function ( buildin_abs ) where
 
 import Prelude
@@ -28,12 +30,15 @@ instance Monad Evaluation where
 instance F.MonadFail Evaluation where
     fail = Evaluation . Left
 
+instance F.MonadFail (Either [Char]) where
+    fail = Left
+
 data CurriedFunction a = CurriedFunction {
-    runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Evaluation Value
+    runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Either [Char] Value
 }
 
 newtype Function = Function {
-    runFunction :: [Value] -> [([Char], Value)] -> Evaluation Value
+    runFunction :: [Value] -> [([Char], Value)] -> Either [Char] Value
 }
 
 invalidate :: [Char] -> Evaluation a
@@ -41,7 +46,7 @@ invalidate = Evaluation . Left
 
 overload :: NonEmpty Function -> Function
 overload fs = Function $ \ovs kvs -> g $ fmap (\f -> (runFunction f) ovs kvs) fs
-    where g = Evaluation . sconcat . fmap runEvaluation
+    where g = sconcat
 
 call :: a -> CurriedFunction a -> Function
 call f e = Function $ \ovs kvs -> (runCurriedFunction e) f ovs kvs
@@ -49,7 +54,7 @@ call f e = Function $ \ovs kvs -> (runCurriedFunction e) f ovs kvs
 ret :: (a -> Value) -> CurriedFunction a
 ret f = CurriedFunction $ \x _ _ -> pure $ f x
 
-ret' :: (a -> Evaluation Value) -> CurriedFunction a
+ret' :: (a -> Either [Char] Value) -> CurriedFunction a
 ret' f = CurriedFunction $ \x _ _ -> f x
 
 -- Adds parameter at new first to a function
@@ -57,15 +62,15 @@ ret' f = CurriedFunction $ \x _ _ -> f x
 -- dv (:: Maybe a)                default value of parameter
 -- ctr (:: Value -> Evaluation a) constructor of parameter from arbirary value
 -- rf (:: Function b)             remaining part of function
-param :: [Char] -> Maybe a -> (Value -> Evaluation a) -> CurriedFunction b -> CurriedFunction (a -> b)
+param :: [Char] -> Maybe a -> (Value -> Either [Char] a) -> CurriedFunction b -> CurriedFunction (a -> b)
 param k dv ctr rf = CurriedFunction $ \f ovs kvs -> case ovs of
     { [] -> maybe (maybe msg1 h1 dv) h2 $ lookup k kvs where
-        msg1 = invalidate $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument!"
+        msg1 = Left $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument!"
         h1 x = runCurriedFunction rf (f x) [] kvs
         h2 v = ctr v >>= \x -> runCurriedFunction rf (f x) [] kvs
     ; (o:os) -> maybe h3 (const msg3) $ lookup k kvs where
         h3 = ctr o >>= \x -> runCurriedFunction rf (f x) os kvs
-        msg3 = invalidate $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
+        msg3 = Left $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
     }
 
 buildin_abs = overload $ doInt :| [doFloat] where
