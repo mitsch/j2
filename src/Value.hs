@@ -45,10 +45,11 @@ module Value ( Value(..)
 import qualified Control.Monad.Fail as F
 import Data.Ratio
 import Data.List ( intercalate )
+import Evaluation ( Evaluation(..) )
 
 
 data Function a = Function {
-    runFunction :: [a] -> [([Char], a)] -> Either [Char] a
+    runFunction :: [a] -> [([Char], a)] -> Evaluation a
 }
 
 data Value = NoneVal

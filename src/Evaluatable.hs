@@ -34,6 +34,7 @@ import Control.Applicative ( Alternative, empty, (<|>) )
 import Data.Ratio ( numerator )
 import Data.Maybe ( listToMaybe )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
+import Evaluation ( Evaluation(..) )
 
 anyOf :: Alternative f => [f a] -> f a
 anyOf [] = empty
@@ -361,7 +362,7 @@ instance ( Monad m
         { (c', ca) <- evaluate c
         ; f <- expectFunction c'
         ; xs <- mapM (evaluate . snd) ps
-        ; case (runFunction f) (fmap fst xs) [] of
+        ; case runEvaluation $ (runFunction f) (fmap fst xs) [] of
             { Left msg -> fail msg
             ; Right y -> return (y, a)
             }
