@@ -146,7 +146,7 @@ options =
 
 
 initialSymbols :: (Monad m) => m [([Char], Value)]
-initialSymbols = return []
+initialSymbols = return [("abs", FunctionVal "buildin_abs" buildin_abs)]
 
 
 main :: IO ()
