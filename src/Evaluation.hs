@@ -17,3 +17,4 @@ instance Monad (Evaluation) where
 
 instance MonadFail (Evaluation) where
     fail = Evaluation . Left
+

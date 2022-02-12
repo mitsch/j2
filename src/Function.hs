@@ -3,58 +3,38 @@
 module Function ( buildin_abs ) where
 
 import Prelude
-import Value ( Value(..), Type, expectInteger, expectFloat )
+import Value ( Value(..), Type, expectInteger, expectFloat, Function(..) )
 import qualified Prelude ( abs )
 import Text.Read ( readMaybe )
 import Data.Either ( Either )
 import Data.Char ( Char )
 import Data.Maybe ( Maybe(..) )
-import Data.Semigroup ( Semigroup, sconcat )
+import Data.Semigroup ( Semigroup, sconcat, (<>) )
 import Data.List.NonEmpty ( NonEmpty(..) )
-import Control.Applicative ( Applicative, pure, (<*>) )
-import Control.Monad.Fail as F
-
-data Evaluation a = Evaluation { runEvaluation :: Either [Char] a }
-
-instance Functor Evaluation where
-    fmap f x = Evaluation $ fmap f $ runEvaluation x
-
-instance Applicative Evaluation where
-    pure = Evaluation . pure
-    a <*> b = Evaluation $ (runEvaluation a) <*> (runEvaluation b)
-
-instance Monad Evaluation where
-    return = Evaluation . return
-    x >>= f = either (Evaluation . Left) f $ runEvaluation x
-
-instance F.MonadFail Evaluation where
-    fail = Evaluation . Left
-
-instance F.MonadFail (Either [Char]) where
-    fail = Left
+import Value ( Value, Function(..) )
+import Evaluation ( Evaluation(..) )
 
 data CurriedFunction a = CurriedFunction {
-    runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Either [Char] Value
+    runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Evaluation Value
 }
 
-newtype Function = Function {
-    runFunction :: [Value] -> [([Char], Value)] -> Either [Char] Value
-}
+instance Semigroup (Evaluation Value) where
+    a <> b = Evaluation $ (runEvaluation a) <> (runEvaluation b)
 
 invalidate :: [Char] -> Evaluation a
 invalidate = Evaluation . Left
 
-overload :: NonEmpty Function -> Function
+overload :: NonEmpty (Function Value) -> Function Value
 overload fs = Function $ \ovs kvs -> g $ fmap (\f -> (runFunction f) ovs kvs) fs
     where g = sconcat
 
-call :: a -> CurriedFunction a -> Function
+call :: a -> CurriedFunction a -> Function Value
 call f e = Function $ \ovs kvs -> (runCurriedFunction e) f ovs kvs
 
 ret :: (a -> Value) -> CurriedFunction a
 ret f = CurriedFunction $ \x _ _ -> pure $ f x
 
-ret' :: (a -> Either [Char] Value) -> CurriedFunction a
+ret' :: (a -> Evaluation Value) -> CurriedFunction a
 ret' f = CurriedFunction $ \x _ _ -> f x
 
 -- Adds parameter at new first to a function
@@ -62,15 +42,15 @@ ret' f = CurriedFunction $ \x _ _ -> f x
 -- dv (:: Maybe a)                default value of parameter
 -- ctr (:: Value -> Evaluation a) constructor of parameter from arbirary value
 -- rf (:: Function b)             remaining part of function
-param :: [Char] -> Maybe a -> (Value -> Either [Char] a) -> CurriedFunction b -> CurriedFunction (a -> b)
+param :: [Char] -> Maybe a -> (Value -> Evaluation a) -> CurriedFunction b -> CurriedFunction (a -> b)
 param k dv ctr rf = CurriedFunction $ \f ovs kvs -> case ovs of
     { [] -> maybe (maybe msg1 h1 dv) h2 $ lookup k kvs where
-        msg1 = Left $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument!"
+        msg1 = fail $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument!"
         h1 x = runCurriedFunction rf (f x) [] kvs
         h2 v = ctr v >>= \x -> runCurriedFunction rf (f x) [] kvs
     ; (o:os) -> maybe h3 (const msg3) $ lookup k kvs where
         h3 = ctr o >>= \x -> runCurriedFunction rf (f x) os kvs
-        msg3 = Left $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
+        msg3 = fail $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
     }
 
 buildin_abs = overload $ doInt :| [doFloat] where
