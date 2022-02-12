@@ -3,7 +3,7 @@
 module Function ( buildin_abs ) where
 
 import Prelude
-import Value ( Value(..), Type, expectInteger, expectFloat, Function(..) )
+import Value ( Value(..), Type, expectInteger, expectFloat, Function(..), asFloat, asInteger)
 import qualified Prelude ( abs )
 import Text.Read ( readMaybe )
 import Data.Either ( Either )
@@ -21,12 +21,11 @@ data CurriedFunction a = CurriedFunction {
 instance Semigroup (Evaluation Value) where
     a <> b = Evaluation $ (runEvaluation a) <> (runEvaluation b)
 
-invalidate :: [Char] -> Evaluation a
-invalidate = Evaluation . Left
-
 overload :: NonEmpty (Function Value) -> Function Value
 overload fs = Function $ \ovs kvs -> g $ fmap (\f -> (runFunction f) ovs kvs) fs
-    where g = sconcat
+    where g (x:|xs) = either (\e -> f [e] xs) pure $ runEvaluation x
+          f es [] = fail "end of overload"
+          f es (x:xs) = either (\e -> f (e:es) xs) pure $ runEvaluation x
 
 call :: a -> CurriedFunction a -> Function Value
 call f e = Function $ \ovs kvs -> (runCurriedFunction e) f ovs kvs
@@ -53,9 +52,9 @@ param k dv ctr rf = CurriedFunction $ \f ovs kvs -> case ovs of
         msg3 = fail $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
     }
 
-buildin_abs = overload $ doInt :| [doFloat] where
-    doInt = call Prelude.abs $ param "x" Nothing expectInteger $ ret IntegerVal
-    doFloat = call Prelude.abs $ param "x" Nothing expectFloat $ ret FloatVal
+buildin_abs = overload (doInt :| [doFloat]) where
+    doInt = call Prelude.abs $ param "x" Nothing (maybe (Evaluation $ Left "not an integer") pure . asInteger) $ ret IntegerVal
+    doFloat = call Prelude.abs $ param "x" Nothing (maybe (Evaluation $ Left "not a float") pure . asFloat) $ ret FloatVal
 
 -- -- 
 -- -- buildin_attr = callBuildin lookup
