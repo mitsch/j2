@@ -13,6 +13,7 @@ import Data.Semigroup ( Semigroup, sconcat, (<>) )
 import Data.List.NonEmpty ( NonEmpty(..) )
 import Value ( Value, Function(..) )
 import Evaluation ( Evaluation(..) )
+import Error ( throwError, traceError )
 
 data CurriedFunction a = CurriedFunction {
     runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Evaluation Value
@@ -53,8 +54,12 @@ param k dv ctr rf = CurriedFunction $ \f ovs kvs -> case ovs of
     }
 
 buildin_abs = overload (doInt :| [doFloat]) where
-    doInt = call Prelude.abs $ param "x" Nothing (maybe (Evaluation $ Left "not an integer") pure . asInteger) $ ret IntegerVal
-    doFloat = call Prelude.abs $ param "x" Nothing (maybe (Evaluation $ Left "not a float") pure . asFloat) $ ret FloatVal
+    doInt = call Prelude.abs
+          $ param "x" Nothing (\v -> maybe (throwError "parameter x" 1 "not an integer") pure $ asInteger v)
+          $ ret IntegerVal
+    doFloat = call Prelude.abs
+            $ param "x" Nothing (maybe (throwError "parameter x" 1 "not a float") pure . asFloat)
+            $ ret FloatVal
 
 -- -- 
 -- -- buildin_attr = callBuildin lookup
