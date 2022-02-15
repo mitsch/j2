@@ -363,7 +363,7 @@ instance ( Monad m
         ; f <- expectFunction c'
         ; xs <- mapM (evaluate . snd) ps
         ; case runEvaluation $ (runFunction f) (fmap fst xs) [] of
-            { Left msg -> fail msg
+            { Left msg -> fail "<should be forwarding the error instead>"
             ; Right y -> return (y, a)
             }
         }
