@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Error ( Error(..)
              , ErrorTree
              , throwError
@@ -5,21 +7,27 @@ module Error ( Error(..)
              , traceError
     ) where
 
-class ErrorTree l a | a -> l where
-    throwError :: [Char] -> l -> a
-    collectError :: a -> a -> a
-    traceError :: [Char] -> l -> a -> a
+import Data.List.NonEmpty ( NonEmpty(..) )
+import Data.Semigroup
+
+class ErrorTree a where
+    throwError :: [Char] -> Int -> [Char] -> a
+    collectError :: NonEmpty a -> a
+    traceError :: [Char] -> Int -> [Char] -> a -> a
 
 
-data Error l = ErrorReason [Char] l
-             | ErrorTrace [Char] l (Error l)
-             | ErrorBranch (Error l) (Error l)
+data Error = ErrorLeaf [Char] Int [Char]
+           | ErrorTrace [Char] Int [Char] Error
+           | ErrorBranch (NonEmpty Error)
 
 
-instance ErrorTree l (Error l) where
+instance ErrorTree Error where
     throwError = ErrorLeaf
     collectError = ErrorBranch
     traceError = ErrorTrace
 
 instance Semigroup (Error) where
-    (<>) = ErrorBranch
+    (ErrorBranch (a:|as)) <> (ErrorBranch (b:|bs)) = ErrorBranch $ a:|(as ++ b:bs)
+    (ErrorBranch (a:|as)) <> b                     = ErrorBranch $ a:|(as ++ [b])
+    a                     <> (ErrorBranch (b:|bs)) = ErrorBranch $ a:|(b:bs)
+    a                     <> b                     = ErrorBranch $ a:|[b]
