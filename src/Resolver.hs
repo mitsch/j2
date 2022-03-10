@@ -16,6 +16,7 @@ import Control.Monad.Trans.Class (MonadTrans, lift)
 import qualified Control.Monad.Fail as F
 import Control.Applicative (Alternative, (<|>), liftA2, empty)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Error ( Error, throwError, collectError, traceError )
 
 class (Monad m) => MonadResolver v m | m -> v where
     resolveName :: [Char] -> m v
@@ -61,3 +62,12 @@ instance (Monad m, F.MonadFail m) => MonadResolver v (ResolverT v m) where
     resolveName n = ResolverT (f . listToMaybe . mapMaybe (lookup n))
         where f = maybe (F.fail $ "Unknown name " ++ show n) return
     withNames ws m = ResolverT $ \vs -> runResolverT m (ws:vs)
+
+instance (Error t m) => Error t (ResolverT v m) where
+    throwError = ResolverT . const . throwError
+    collectError xs = ResolverT
+                    $ \ symbs -> collectError
+                    $ fmap (flip runResolverT symbs) xs
+    traceError msg tg x = ResolverT
+                        $ \ symbs -> traceError msg tg
+                        $ runResolverT x symbs
