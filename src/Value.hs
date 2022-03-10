@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Value ( Value(..)
              , Function (..)
@@ -19,15 +20,6 @@ module Value ( Value(..)
              , expectObject
              , expectFunction
              , testValue
-             , asNone
-             , asBool
-             , asInteger
-             , asFloat
-             , asString
-             , asList
-             , asDictionary
-             , asObject
-             , asFunction
              , noneVal
              , boolVal
              , integerVal
@@ -40,17 +32,18 @@ module Value ( Value(..)
              , printCompact
              , printPretty
              , typeOf
+             , toBool
     ) where
 
 import qualified Control.Monad.Fail as F
 import Data.Ratio
 import Data.List ( intercalate )
 import Evaluation ( Evaluation(..) )
+import Location ( Location(..) )
+import Error ( Error(..), ExceptionT(..) )
+import Function ( Function(..) )
+import Control.Monad.Identity ( Identity )
 
-
-data Function a = Function {
-    runFunction :: [a] -> [([Char], a)] -> Evaluation a
-}
 
 data Value = NoneVal
            | BoolVal Bool
@@ -60,8 +53,8 @@ data Value = NoneVal
            | ListVal [Value]
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
-           | FunctionVal [Char] (Function Value)
-           | MacroVal [Char] ([Value] -> Either [[Char]] [[Char]])
+           | FunctionVal [Char] (Function Identity Value)
+           | MacroVal Location ([Value] -> Either [[Char]] [[Char]])
 
 data Type = NoneType
           | BoolType
@@ -86,7 +79,7 @@ instance Show Type where
     show FunctionType   = "Function"
     show MacroType      = "Macro"
 
-class (F.MonadFail n) => FromValue n a where
+class FromValue n a where
     expectNone :: a -> n ()
     expectBool :: a -> n Bool
     expectInteger :: a -> n Integer
@@ -95,42 +88,12 @@ class (F.MonadFail n) => FromValue n a where
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
     expectObject :: a -> n [([Char], a)]
-    expectFunction :: a -> n (Function a)
-    expectMacro :: a -> n ([Value] -> Either [[Char]] [[Char]])
+    expectFunction :: a -> n (Function Identity a)
+    expectMacro :: a -> n ([a] -> Either [[Char]] [[Char]])
     testValue :: a -> Bool
 
-asNone :: (FromValue Maybe a) => a -> Maybe ()
-asNone = expectNone
 
-asBool :: (FromValue Maybe a) => a -> Maybe Bool
-asBool = expectBool
-
-asInteger :: (FromValue Maybe a) => a -> Maybe Integer
-asInteger = expectInteger
-
-asFloat :: (FromValue Maybe a) => a -> Maybe Float
-asFloat = expectFloat
-
-asString :: (FromValue Maybe a) => a -> Maybe [Char]
-asString = expectString
-
-asList :: (FromValue Maybe a) => a -> Maybe [a]
-asList = expectList
-
-asObject :: (FromValue Maybe a) => a -> Maybe [([Char], a)]
-asObject = expectObject
-
-asDictionary :: (FromValue Maybe a) => a -> Maybe [(a, a)]
-asDictionary = expectDictionary
-
-asFunction :: (FromValue Maybe a) => a -> Maybe (Function a)
-asFunction = expectFunction
-
-asMacro :: (FromValue Maybe a) => a -> Maybe ([Value] -> Either [[Char]] [[Char]])
-asMacro = expectMacro
-
-
-class ToValue a where
+class ToValue m a where
     noneVal :: a
     boolVal :: Bool -> a
     integerVal :: Integer -> a
@@ -139,8 +102,8 @@ class ToValue a where
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
-    functionVal :: [Char] -> (Function a) -> a
-    macroVal :: [Char] -> ([a] -> Either [[Char]] [[Char]]) -> a
+    functionVal :: [Char] -> (Function Identity a) -> a
+    macroVal :: Location -> ([a] -> Either [[Char]] [[Char]]) -> a
 
 
 
@@ -157,8 +120,8 @@ printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = show k ++ ":" ++ printCompact v
 printCompact (DictionaryVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = printCompact k ++ ":" ++ printCompact v
-printCompact (FunctionVal n _) = "@" ++ n
-printCompact (MacroVal n _) = "@" ++ n
+printCompact (FunctionVal n _) = "@" ++ (show n)
+printCompact (MacroVal n _) = "@" ++ (show n)
 
 
 joinBC :: [[[Char]]] -> [[Char]]
@@ -191,8 +154,8 @@ printPretty (DictionaryVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
     where f (k,v) = let (vh:vt) = printPretty v
                     in (printCompact k ++ ": " ++ vh):(fmap g vt)
           g = ("\t"++)
-printPretty (FunctionVal n _) = ["@" ++ n]
-printPretty (MacroVal n _) = ["@" ++ n]
+printPretty (FunctionVal n _) = ["@" ++ show n]
+printPretty (MacroVal n _) = ["@" ++ show n]
 
 isEqual :: Value -> Value -> Bool
 isEqual NoneVal NoneVal = True
@@ -225,27 +188,40 @@ typeOf (ObjectVal _)     = ObjectType
 typeOf (FunctionVal _ _) = FunctionType
 typeOf (MacroVal _ _)    = MacroType
 
-instance (F.MonadFail n) => FromValue n Value where
-    expectNone NoneVal = return ()
-    expectNone x = fail $ "Expected None but got " ++ show (typeOf x)
-    expectBool (BoolVal x) = return x
-    expectBool x = fail $ "Expected Bool but got " ++ show (typeOf x)
-    expectInteger (IntegerVal x) = return x
-    expectInteger x = fail $ "Expected Integer but got " ++ show (typeOf x)
-    expectFloat (FloatVal x) = return x
-    expectFloat x = fail $ "Expected Float but got " ++ show (typeOf x)
-    expectString (StringVal x) = return x
-    expectString x = fail $ "Expected String but got " ++ show (typeOf x)
-    expectList (ListVal x) = return x
-    expectList x = fail $ "Expected List but got " ++ show (typeOf x)
-    expectDictionary (DictionaryVal x) = return x
-    expectDictionary x = fail $ "Expected Dictionary but got " ++ show (typeOf x)
-    expectObject (ObjectVal x) = return x
-    expectObject x = fail $ "Expected Object but got " ++ show (typeOf x)
-    expectFunction (FunctionVal _ x) = return x
-    expectFunction x = fail $ "Expected Function but got " ++ show (typeOf x)
-    expectMacro (MacroVal _ x) = return x
-    expectMacro x = fail $ "Expected Macro but got " ++ show (typeOf x)
+toBool :: Value -> Bool
+toBool NoneVal = False
+toBool (BoolVal x) = x
+toBool (IntegerVal x) = x /= 0
+toBool (FloatVal x) = x /= 0
+toBool (StringVal x) = not $ null x
+toBool (ListVal x) = not $ null x
+toBool (DictionaryVal x) = not $ null x
+toBool (ObjectVal x) = not $ null x
+toBool _ = False
+
+
+
+instance (Applicative n, Error t n) => FromValue n Value where
+    expectNone NoneVal = pure ()
+    expectNone x = throwError ("Expected None but got " ++ show (typeOf x))
+    expectBool (BoolVal x) = pure x
+    expectBool x = throwError $ "Expected Bool but got " ++ show (typeOf x)
+    expectInteger (IntegerVal x) = pure x
+    expectInteger x = throwError $ "Expected Integer but got " ++ show (typeOf x)
+    expectFloat (FloatVal x) = pure x
+    expectFloat x = throwError $ "Expected Float but got " ++ show (typeOf x)
+    expectString (StringVal x) = pure x
+    expectString x = throwError $ "Expected String but got " ++ show (typeOf x)
+    expectList (ListVal x) = pure x
+    expectList x = throwError $ "Expected List but got " ++ show (typeOf x)
+    expectDictionary (DictionaryVal x) = pure x
+    expectDictionary x = throwError $ "Expected Dictionary but got " ++ show (typeOf x)
+    expectObject (ObjectVal x) = pure x
+    expectObject x = throwError $ "Expected Object but got " ++ show (typeOf x)
+    expectFunction (FunctionVal _ x) = pure x
+    expectFunction x = throwError $ "Expected Function but got " ++ show (typeOf x)
+    expectMacro (MacroVal _ x) = pure x
+    expectMacro x = throwError $ "Expected Macro but got " ++ show (typeOf x)
     testValue NoneVal = False
     testValue (BoolVal x) = x
     testValue (IntegerVal x) = x /= 0
@@ -258,7 +234,7 @@ instance (F.MonadFail n) => FromValue n Value where
     testValue (MacroVal _ _) = True
 
 
-instance ToValue (Value) where
+instance ToValue m Value where
     noneVal       = NoneVal
     boolVal       = BoolVal
     integerVal    = IntegerVal
