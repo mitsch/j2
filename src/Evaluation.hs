@@ -1,30 +1,43 @@
-module Evaluation ( Evaluation(..) ) where
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-import Control.Monad.Fail ( MonadFail, fail )
-import Error ( Error, ErrorTree, throwError, collectError, traceError )
-import Data.List.NonEmpty ( NonEmpty(..) )
+module Evaluation ( EvaluationT(..), Evaluation(..), onBadEval ) where
 
-data Evaluation a = Evaluation { runEvaluation :: Either Error a }
+import Control.Monad.Identity ( Identity )
 
-instance Functor (Evaluation) where
-    fmap f = Evaluation . fmap f . runEvaluation
+newtype EvaluationT m e a = EvaluationT { runEvaluationT :: m (Either e a) }
 
-instance Applicative (Evaluation) where
-    pure = Evaluation . Right
-    f <*> x = Evaluation $ (runEvaluation f) <*> (runEvaluation x)
+type Evaluation e a = EvaluationT Identity e a
 
-instance Monad (Evaluation) where
-    return = Evaluation . Right
-    x >>= f = either (Evaluation . Left) f $ runEvaluation x
 
-instance ErrorTree (Evaluation a) where
-    throwError msg ln pth = Evaluation $ Left $ throwError msg ln pth
-    collectError = Evaluation
-                 . either Right (Left . collectError)
-                 . traverse (either Right Left)
-                 . fmap runEvaluation
-    traceError msg ln pth err = Evaluation
-                              $ either (Left . traceError msg ln pth) Right
-                              $ runEvaluation err
+instance (Functor m) => Functor (EvaluationT m e) where
+    fmap f = EvaluationT . fmap (fmap f) . runEvaluationT
 
+instance (Monad m) => Applicative (EvaluationT m e) where
+    pure = EvaluationT . return . pure
+    mf <*> mx = EvaluationT $ do
+                { f' <- runEvaluationT mf
+                ; case f' of
+                    { Left e -> return $ Left e
+                    ; Right f -> do
+                        { x' <- runEvaluationT mx
+                        ; case x' of
+                            { Left e -> return $ Left e
+                            ; Right x -> return $ Right $ f x
+                            }
+                        }
+                    }
+                }
+
+instance (Monad m) => Monad (EvaluationT m e) where
+    return = EvaluationT . return . return
+    mx >>= f = EvaluationT $ do
+                { x' <- runEvaluationT mx
+                ; either (return . Left) (runEvaluationT . f) $ x'
+                }
+
+onBadEval :: Functor m => (e1 -> e2) -> EvaluationT m e1 a -> EvaluationT m e2 a
+onBadEval f x = EvaluationT
+              $ fmap (either (Left . f) (Right . id))
+              $ runEvaluationT x
 
