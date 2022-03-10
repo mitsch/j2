@@ -25,7 +25,9 @@ import Value (Value(..))
 import Exception
 import Evaluatable ( Evaluatable, evaluate )
 import Resolver ( runResolverT )
-import Function ( buildin_abs )
+import Function (  )
+import Location ( Location(..) )
+import Error ( ExceptionT(..) )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
@@ -146,7 +148,8 @@ options =
 
 
 initialSymbols :: (Monad m) => m [([Char], Value)]
-initialSymbols = return [("abs", FunctionVal "buildin_abs" buildin_abs)]
+-- initialSymbols = return [("abs", FunctionVal (BuiltinLocation "buildin_abs") buildin_abs)]
+initialSymbols = return []
 
 
 main :: IO ()
@@ -157,7 +160,10 @@ main = do
         { Left err -> putStrLn $ "Error: " ++ show err
         ; Right xs -> do
             { symbols <- initialSymbols
-            ; output <- runResolverT (execute xs) [symbols]
-            ; putStrLn $ concat output
+            ; exception <- runException $ runResolverT (execute xs) [symbols]
+            ; case exception of
+                { Left e -> hPutStrLn stderr $ "Got some error"
+                ; Right output -> putStrLn $ concat output
+                }
             }
         }
