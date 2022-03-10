@@ -1,9 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Function ( buildin_abs ) where
+module Function ( Function(..) ) where
 
 import Prelude
-import Value ( Value(..), Type, expectInteger, expectFloat, Function(..), asFloat, asInteger)
 import qualified Prelude ( abs )
 import Text.Read ( readMaybe )
 import Data.Either ( Either )
@@ -11,56 +10,55 @@ import Data.Char ( Char )
 import Data.Maybe ( Maybe(..) )
 import Data.Semigroup ( Semigroup, sconcat, (<>) )
 import Data.List.NonEmpty ( NonEmpty(..) )
-import Value ( Value, Function(..) )
-import Evaluation ( Evaluation(..) )
-import Error ( throwError, traceError )
+import Control.Monad.Fail ( MonadFail )
+import Error ( throwError )
 
-data CurriedFunction a = CurriedFunction {
-    runCurriedFunction :: a -> [Value] -> [([Char], Value)] -> Evaluation Value
-}
 
-instance Semigroup (Evaluation Value) where
-    a <> b = Evaluation $ (runEvaluation a) <> (runEvaluation b)
+data Function m a = Function { runFunction :: [a] -> [([Char], a)] -> m a }
 
-overload :: NonEmpty (Function Value) -> Function Value
-overload fs = Function $ \ovs kvs -> g $ fmap (\f -> (runFunction f) ovs kvs) fs
-    where g (x:|xs) = either (\e -> f [e] xs) pure $ runEvaluation x
-          f es [] = fail "end of overload"
-          f es (x:xs) = either (\e -> f (e:es) xs) pure $ runEvaluation x
-
-call :: a -> CurriedFunction a -> Function Value
-call f e = Function $ \ovs kvs -> (runCurriedFunction e) f ovs kvs
-
-ret :: (a -> Value) -> CurriedFunction a
-ret f = CurriedFunction $ \x _ _ -> pure $ f x
-
-ret' :: (a -> Evaluation Value) -> CurriedFunction a
-ret' f = CurriedFunction $ \x _ _ -> f x
+invokeFn :: a -> (a -> Function m b) -> Function m b
+invokeFn = flip ($)
 
 -- Adds parameter at new first to a function
 -- k (:: [Char])                  key name of parameter
 -- dv (:: Maybe a)                default value of parameter
 -- ctr (:: Value -> Evaluation a) constructor of parameter from arbirary value
 -- rf (:: Function b)             remaining part of function
-param :: [Char] -> Maybe a -> (Value -> Evaluation a) -> CurriedFunction b -> CurriedFunction (a -> b)
-param k dv ctr rf = CurriedFunction $ \f ovs kvs -> case ovs of
-    { [] -> maybe (maybe msg1 h1 dv) h2 $ lookup k kvs where
-        msg1 = fail $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument!"
-        h1 x = runCurriedFunction rf (f x) [] kvs
-        h2 v = ctr v >>= \x -> runCurriedFunction rf (f x) [] kvs
-    ; (o:os) -> maybe h3 (const msg3) $ lookup k kvs where
-        h3 = ctr o >>= \x -> runCurriedFunction rf (f x) os kvs
-        msg3 = fail $ "Parameter \"" ++ k ++ "\" has positional and named argument!"
+param :: (Monad m, MonadFail m)
+    => [Char]
+    -> Maybe a
+    -> (b -> m a)
+    -> (c -> Function m b)
+    -> (a -> c)
+    -> Function m b
+param k dv ctr rf = \f -> Function $ \ops kps -> case ops of
+    { [] -> maybe (maybe msg1 h2 dv) h1 $ lookup k kps where
+                h1 v = ctr v >>= \x -> runFunction (rf $ f x) [] kps
+                h2 x = runFunction (rf $ f x) [] kps
+                msg1 = fail $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument."
+    ; (o:os) -> maybe h3 (const msg2) $ lookup k kps where
+                    msg2 = fail $ "Parameter \"" ++ k ++ "\" has positional and named argument."
+                    h3 = ctr o >>= \x -> runFunction (rf $ f x) os kps
     }
 
-buildin_abs = overload (doInt :| [doFloat]) where
-    doInt = call Prelude.abs
-          $ param "x" Nothing (\v -> maybe (throwError "parameter x" 1 "not an integer") pure $ asInteger v)
-          $ ret IntegerVal
-    doFloat = call Prelude.abs
-            $ param "x" Nothing (maybe (throwError "parameter x" 1 "not a float") pure . asFloat)
-            $ ret FloatVal
+pureFn :: (Applicative m) => (a -> b) -> (a -> Function m b)
+pureFn f = \x -> Function $ \_ _ -> pure $ f x
 
+returnFn :: (a -> m b) -> (a -> Function m b)
+returnFn f = \x -> Function $ \_ _ -> f x
+
+overload :: (Semigroup (m a)) => NonEmpty (Function m a) -> Function m a
+overload fs = Function $ \ovs kvs -> sconcat $ fmap (\f -> runFunction f ovs kvs) fs
+
+
+-- buildin_abs = overload (doInt :| [doFloat]) where
+--    doInt = invokeFn Prelude.abs
+--          $ param "x" Nothing (\v -> maybe (throwError $ "not an integer" "builtin abs") pure $ asInteger v)
+--          $ pureFn IntegerVal
+--    doFloat = invokeFn Prelude.abs
+--            $ param "x" Nothing (maybe (throwError "not a float" "builtin abs") pure . asFloat)
+--            $ pureFn FloatVal
+-- 
 -- -- 
 -- -- buildin_attr = callBuildin lookup
 -- --              $ param "obj" Nothing expectObject
