@@ -21,6 +21,7 @@ import Value ( Value
              , noneVal
              , stringVal
              )
+import Error ( Error )
 
 
 anyOf :: [Maybe a] -> Maybe a
@@ -93,9 +94,9 @@ executeCall x = do
 
 mapStmt :: ( Monad m
            , F.MonadFail m
-           , Alternative m
            , MonadResolver Value m
            , MonadIO m
+           , Error t m
            ) => Statement a -> m [[Char]]
 mapStmt (LiteralStmt x _) = return [x]
 mapStmt (InterpolationStmt x _) = fmap f $ evaluate x
@@ -134,8 +135,8 @@ class Executable e m where
 
 instance ( Monad m
          , F.MonadFail m
-         , Alternative m
          , MonadResolver Value m
          , MonadIO m
+         , Error t m
          ) => Executable Statement m where
     execute = concatMapM mapStmt
