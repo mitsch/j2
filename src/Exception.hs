@@ -14,12 +14,12 @@ class MonadException e m where
     catchException :: m a -> (e -> m a) -> m a
     traceException :: (e -> e) -> m a -> m a
 
-newtype ExceptionT e m a = ExceptionT { runExceptionT :: m (Either e a)}
+newtype ExceptionT m e a = ExceptionT { runExceptionT :: m (Either e a)}
 
-liftExceptionT :: (Functor m) =>  m a -> ExceptionT e m a
+liftExceptionT :: (Functor m) =>  m a -> ExceptionT m e a
 liftExceptionT = ExceptionT . fmap Right
 
-instance (Monad m) => MonadException e (ExceptionT e m) where
+instance (Monad m) => MonadException e (ExceptionT m e) where
     throwException e = ExceptionT $ return $ Left e
     catchException x f = ExceptionT $ do
         { x' <- runExceptionT x
@@ -30,21 +30,21 @@ instance (Monad m) => MonadException e (ExceptionT e m) where
         }
     traceException f x = ExceptionT $ fmap (either (Left . f) Right) $ runExceptionT x
 
-instance Functor (m) => Functor (ExceptionT e m) where
+instance Functor (m) => Functor (ExceptionT m e) where
     fmap f x = ExceptionT $ fmap (fmap f) $ runExceptionT x
     a <$ x = ExceptionT $ fmap (a <$) $ runExceptionT x
 
-instance (Applicative m) => Applicative (ExceptionT e m) where
+instance (Applicative m) => Applicative (ExceptionT m e) where
     pure x = ExceptionT $ pure $ Right x
     f <*> x = ExceptionT $ liftA2 (<*>) (runExceptionT f) (runExceptionT x)
 
-instance (MonadIO m) => MonadIO (ExceptionT e m) where
+instance (MonadIO m) => MonadIO (ExceptionT m e) where
     liftIO x = ExceptionT $ fmap Right $ liftIO x
 
 instance MonadTrans (ExceptionT e) where
     lift = liftExceptionT
 
-instance (Monad m) => Monad (ExceptionT e m) where
+instance (Monad m) => Monad (ExceptionT m e) where
     return = liftExceptionT . return
     x >>= f = ExceptionT $ do
         { x' <- runExceptionT x
