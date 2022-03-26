@@ -17,6 +17,7 @@ import Value ( Value(..)
              , expectDictionary
              , expectObject
              , expectFunction
+             , expectBuildin
              , testValue
              , toBool
              , noneVal
@@ -31,15 +32,17 @@ import Value ( Value(..)
              , FromValue
              )
 import qualified Control.Monad.Fail as F
-import Resolver ( MonadResolver, resolveName )
 import Control.Applicative ( Alternative, empty, (<|>) )
 import Data.Ratio ( numerator )
 import Data.Maybe ( listToMaybe )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Evaluation ( Evaluation(..) )
-import Error ( Error, collectError, throwError )
+import Error ( Error, collectError, throwError, Exception(..), ExceptionT(..) )
 import Data.List.NonEmpty ( (<|), NonEmpty( (:|) ) )
 import Control.Monad.Identity ( Identity(..) )
+import Function ( callFunction )
+import Buildin ( runBuildin )
+import Resolver ( MonadResolver, resolveName, ResolverT(..), liftResolverT )
 
 
 
@@ -361,14 +364,25 @@ instance ( Monad m
         }
     evaluate (CallExpr ps c a) = do
         { (c', ca) <- evaluate c
-        ; f <- expectFunction c'
         ; xs <- mapM (evaluate . snd) ps
-        ; let res = runIdentity $ runFunction f (fmap fst xs) []
+        ; res <- collectError
+            $  do { f <- expectFunction c'
+                  ; case callFunction f (fmap fst xs) [] of
+                    { Left msgs -> return NoneVal
+                    ; Right ev ->  case runIdentity $ runException $ runResolverT ev [] of
+                        { Left msg -> return NoneVal
+                        ; Right x -> return x
+                        }
+                    }
+                  }
+            <| do { b <- expectBuildin c'
+                  ; return $ case runBuildin b (fmap fst xs) [] of
+                    { Left errs -> NoneVal
+                    ; Right y -> y
+                    }
+                  }
+            :| []
         ; return (res, a)
---        ; case runEvaluation $ (runFunction f) (fmap fst xs) [] of
---            { Left msg -> fail "<should be forwarding the error instead>"
---            ; Right y -> return (y, a)
---            }
         }
     evaluate (LambdaExpr ns b a) = F.fail "Lambda expression is not supported so far"
     evaluate (ComposeExpr x f a) = F.fail "Compose expression is not supported so far"
