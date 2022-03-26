@@ -41,9 +41,14 @@ import Data.Ratio (numerator, (%))
 import Resolver (MonadResolver, withNames, resolveName)
 import Data.Maybe (listToMaybe)
 
+-- TODO should be deprecated:
 anyOf :: Alternative f => [f a] -> f a
 anyOf [] = empty
 anyOf (x:xs) = x <|> anyOf xs
+
+
+class Tagged a t where
+    toTag :: a -> t
 
 
 data Expression a
@@ -122,9 +127,43 @@ instance Functor (Expression) where
     fmap f (LambdaExpr ns b a) = LambdaExpr ns (fmap f b) (f a)
     fmap f (ComposeExpr x y a) = ComposeExpr (fmap f x) (fmap f y) (f a)
 
-
-
-
+instance Tagged (Expression a) a where
+    toTag (NoneExpr a) = a
+    toTag (BoolExpr _ a) = a
+    toTag (IntegerExpr _ a) = a
+    toTag (NumberExpr _ a) = a
+    toTag (StringExpr _ a) = a
+    toTag (SymbolExpr _ a) = a
+    toTag (ListExpr _ a) = a
+    toTag (DictionaryExpr _ a) = a
+    toTag (ObjectExpr _ a) = a
+    toTag (NegateExpr _ a) = a
+    toTag (ComplementExpr _ a) = a
+    toTag (MemberExpr _ _ a) = a
+    toTag (IndexExpr _ _  a) = a
+    toTag (AddExpr _ _ a) = a
+    toTag (SubtractExpr _ _ a) = a
+    toTag (MultiplyExpr _ _ a) = a
+    toTag (DivideExpr _ _ a) = a
+    toTag (IntegralDivideExpr _ _ a) = a
+    toTag (ModuloExpr _ _ a) = a
+    toTag (SameExpr _ _ a) = a
+    toTag (NotSameExpr _ _ a) = a
+    toTag (LessExpr _ _ a) = a
+    toTag (LessEqualExpr _ _ a) = a
+    toTag (GreaterExpr _ _ a) = a
+    toTag (GreaterEqualExpr _ _ a) = a
+    toTag (InExpr _ _ a) = a
+    toTag (NotInExpr _ _ a) = a
+    toTag (IsExpr _ _ a) = a
+    toTag (IsNotExpr _ _ a) = a
+    toTag (AndExpr _ _ a) = a
+    toTag (OrExpr _ _ a) = a
+    toTag (SliceExpr _ _ _ _ a) = a
+    toTag (TernaryExpr _ _ _ a) = a
+    toTag (CallExpr _ _ a) = a
+    toTag (LambdaExpr _ _ a) = a
+    toTag (ComposeExpr _ _ a) = a
 
 data ForStatement a = ForStatement
     { forSymbols :: [[Char]]
