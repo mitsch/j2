@@ -22,7 +22,6 @@ import AST ( Expression(..)
            )
 import Parser ( expression, baseTemplate )
 import Value (Value(..))
-import Exception
 import Evaluatable ( Evaluatable, evaluate )
 import Resolver ( runResolverT )
 import Function (  )
