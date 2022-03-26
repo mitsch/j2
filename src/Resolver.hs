@@ -4,8 +4,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Resolver ( MonadResolver
-                , ResolverT
-                , runResolverT
+                , ResolverT(..)
                 , resolveName
                 , withNames
                 , liftResolverT
@@ -22,20 +21,21 @@ class (Monad m) => MonadResolver v m | m -> v where
     resolveName :: [Char] -> m v
     withNames :: [([Char], v)] -> m a -> m a
 
-newtype ResolverT v m a = ResolverT { runResolverT :: [[([Char], v)]] -> m a}
+data ResolverT v m a = ResolverT { runResolverT :: [[([Char], v)]] -> m a }
 
 liftResolverT :: m a -> ResolverT v m a
 liftResolverT m = ResolverT (const m)
 
-instance MonadTrans (ResolverT v) where
-    lift = liftResolverT
-
 instance (Monad m) => Monad (ResolverT v m) where
     return = liftResolverT . return
     m >>= k = ResolverT $ \vs -> do
-        a <- runResolverT m vs
-        runResolverT (k a) vs
+        { a <- runResolverT m vs
+        ; runResolverT (k a) vs
+        }
     m >> k = ResolverT $ \vs -> runResolverT m vs >> runResolverT k vs
+
+instance MonadTrans (ResolverT v) where
+    lift = liftResolverT
 
 instance (Functor m) => Functor (ResolverT v m) where
     fmap f m = ResolverT $ \vs -> fmap f $ runResolverT m vs
@@ -58,9 +58,9 @@ instance (Alternative m) => Alternative (ResolverT v m) where
 instance (MonadIO m) => MonadIO (ResolverT v m) where
     liftIO = liftResolverT . liftIO
 
-instance (Monad m, F.MonadFail m) => MonadResolver v (ResolverT v m) where
+instance (Monad m, Error t m) => MonadResolver v (ResolverT v m) where
     resolveName n = ResolverT (f . listToMaybe . mapMaybe (lookup n))
-        where f = maybe (F.fail $ "Unknown name " ++ show n) return
+        where f = maybe (throwError $ "Unknown name " ++ show n) return
     withNames ws m = ResolverT $ \vs -> runResolverT m (ws:vs)
 
 instance (Error t m) => Error t (ResolverT v m) where
