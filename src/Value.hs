@@ -19,6 +19,7 @@ module Value ( Value(..)
              , expectDictionary
              , expectObject
              , expectFunction
+             , expectBuildin
              , testValue
              , noneVal
              , boolVal
@@ -40,9 +41,11 @@ import Data.Ratio
 import Data.List ( intercalate )
 import Evaluation ( Evaluation(..) )
 import Location ( Location(..) )
-import Error ( Error(..), ExceptionT(..) )
+import Error ( Error(..), ExceptionT(..), Exception(..) )
 import Function ( Function(..) )
+import Buildin ( Buildin(..) )
 import Control.Monad.Identity ( Identity )
+import Resolver ( ResolverT(..) )
 
 
 data Value = NoneVal
@@ -53,7 +56,8 @@ data Value = NoneVal
            | ListVal [Value]
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
-           | FunctionVal [Char] (Function Identity Value)
+           | FunctionVal [Char] (Function (ResolverT Value (Exception ())) Value)
+           | BuildinVal [Char] (Buildin Value Value)
            | MacroVal Location ([Value] -> Either [[Char]] [[Char]])
 
 data Type = NoneType
@@ -88,7 +92,8 @@ class FromValue n a where
     expectList :: a -> n [a]
     expectDictionary :: a -> n [(a, a)]
     expectObject :: a -> n [([Char], a)]
-    expectFunction :: a -> n (Function Identity a)
+    expectFunction :: a -> n (Function (ResolverT Value (Exception ())) a)
+    expectBuildin :: a -> n (Buildin a a)
     expectMacro :: a -> n ([a] -> Either [[Char]] [[Char]])
     testValue :: a -> Bool
 
@@ -102,7 +107,7 @@ class ToValue m a where
     listVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
-    functionVal :: [Char] -> (Function Identity a) -> a
+    functionVal :: [Char] -> (Function (ResolverT Value (Exception ())) a) -> a
     macroVal :: Location -> ([a] -> Either [[Char]] [[Char]]) -> a
 
 
@@ -220,6 +225,8 @@ instance (Applicative n, Error t n) => FromValue n Value where
     expectObject x = throwError $ "Expected Object but got " ++ show (typeOf x)
     expectFunction (FunctionVal _ x) = pure x
     expectFunction x = throwError $ "Expected Function but got " ++ show (typeOf x)
+    expectBuildin (BuildinVal _ x) = pure x
+    expectBuildin x = throwError $ "Expected Buildin but got " ++ show (typeOf x)
     expectMacro (MacroVal _ x) = pure x
     expectMacro x = throwError $ "Expected Macro but got " ++ show (typeOf x)
     testValue NoneVal = False
