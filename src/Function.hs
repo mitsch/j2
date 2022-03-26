@@ -1,54 +1,148 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Function ( Function(..) ) where
+module Function ( Function(..)
+                , callFunction
+) where
 
 import Prelude
 import qualified Prelude ( abs )
 import Text.Read ( readMaybe )
-import Data.Either ( Either )
+import Data.Either ( Either, partitionEithers )
 import Data.Char ( Char )
 import Data.Maybe ( Maybe(..) )
 import Data.Semigroup ( Semigroup, sconcat, (<>) )
 import Data.List.NonEmpty ( NonEmpty(..) )
+import Data.List ( intersect )
 import Control.Monad.Fail ( MonadFail )
 import Error ( throwError )
+import Resolver ( MonadResolver, withNames )
+-- import Value ( ToValue, listVal )
 
 
-data Function m a = Function { runFunction :: [a] -> [([Char], a)] -> m a }
-
-invokeFn :: a -> (a -> Function m b) -> Function m b
-invokeFn = flip ($)
-
--- Adds parameter at new first to a function
--- k (:: [Char])                  key name of parameter
--- dv (:: Maybe a)                default value of parameter
--- ctr (:: Value -> Evaluation a) constructor of parameter from arbirary value
--- rf (:: Function b)             remaining part of function
-param :: (Monad m, MonadFail m)
-    => [Char]
-    -> Maybe a
-    -> (b -> m a)
-    -> (c -> Function m b)
-    -> (a -> c)
-    -> Function m b
-param k dv ctr rf = \f -> Function $ \ops kps -> case ops of
-    { [] -> maybe (maybe msg1 h2 dv) h1 $ lookup k kps where
-                h1 v = ctr v >>= \x -> runFunction (rf $ f x) [] kps
-                h2 x = runFunction (rf $ f x) [] kps
-                msg1 = fail $ "Parameter \"" ++ k ++ "\" has no positional nor named nor default argument."
-    ; (o:os) -> maybe h3 (const msg2) $ lookup k kps where
-                    msg2 = fail $ "Parameter \"" ++ k ++ "\" has positional and named argument."
-                    h3 = ctr o >>= \x -> runFunction (rf $ f x) os kps
+data (MonadResolver a m) => Function m a = Function
+    { ordinalParams :: [[Char]]
+    , ordinalDefParams :: [([Char], a)]
+    , namedOrOrdinalParams :: [[Char]]
+    , namedOrOrdinalDefParams :: [([Char], a)]
+    , variadicOrdinalParams :: Maybe [Char]
+    , namedParams :: [[Char]]
+    , namedDefParams :: [([Char], a)]
+    , variadicNamedParams :: Maybe [Char]
+    , body :: m a
     }
 
-pureFn :: (Applicative m) => (a -> b) -> (a -> Function m b)
-pureFn f = \x -> Function $ \_ _ -> pure $ f x
+bindOrdinalParams :: [[Char]] -> [a] -> Either [[Char]] [([Char], a)]
+bindOrdinalParams params args = case miss of
+    { [] -> Right $ zip params args
+    ; xs -> Left $ fmap g xs
+    }
+    where (hit, miss) = splitAt (length args) params
+          g x = "missing positional argument for parameter \"" ++ x ++ "\""
 
-returnFn :: (a -> m b) -> (a -> Function m b)
-returnFn f = \x -> Function $ \_ _ -> f x
+bindOrdinalDefParams :: [([Char], a)] -> [a] -> [([Char], a)]
+bindOrdinalDefParams params args = (zip (fmap fst hit) args) ++ miss
+    where (hit, miss) = splitAt (length args) params
 
-overload :: (Semigroup (m a)) => NonEmpty (Function m a) -> Function m a
-overload fs = Function $ \ovs kvs -> sconcat $ fmap (\f -> runFunction f ovs kvs) fs
+bindNamedOrdinalParams :: [[Char]] -> [([Char], a)] -> [a] -> Either [[Char]] [([Char], a)]
+bindNamedOrdinalParams params namArgs posArgs = case unsets of
+    { [] -> Right $ (zip hit posArgs) ++ sets
+    ; xs -> Left $ fmap f xs
+    }
+    where (hit, miss) = splitAt (length posArgs) params
+          (unsets, sets) = partitionEithers $ fmap g miss
+          g x = maybe (Left x) (Right . (,) x) $ lookup x namArgs
+          f x = "missing positional or named argument for parameter \"" ++ x ++ "\""
+
+bindNamedOrdinalDefParams :: [([Char], a)] -> [([Char], a)] -> [a] -> [([Char], a)]
+bindNamedOrdinalDefParams params namArgs posArgs = zip keys posArgs ++ miss
+    where keys = fmap fst params
+          miss = fmap f $ drop (length posArgs) params
+          f (k,d) = maybe (k,d) ((,) k) $ lookup k namArgs
+
+bindVariadicOrdinalParams :: Maybe [Char] -> [a] -> Either [[Char]] [([Char], a)]
+-- TODO need some abstraction from Value.ToValue
+-- bindVariadicOrdinalParams (Just n) posArgs = Right [(n, listVal $ posArgs)]
+bindVariadicOrdinalParams (Just n) posArgs = Right []
+bindVariadicOrdinalParams Nothing [] = Right []
+bindVariadicOrdinalParams Nothing posArgs = Left ["too many positional arguments"]
+
+bindNamedParams :: [[Char]] -> [([Char], a)] -> Either [[Char]] [([Char], a)]
+bindNamedParams params namArgs = case unsets of
+    { [] -> Right sets
+    ; xs -> Left $ fmap g xs
+    }
+    where (sets, unsets) = partitionEithers $ fmap f params
+          f k = maybe (Right k) (Left . (,) k) $ lookup k namArgs
+          g x = "parameter \"" ++ x ++ "\" is not set"
+
+bindNamedDefParams :: [([Char], a)] -> [([Char], a)] -> [([Char], a)]
+bindNamedDefParams params namArgs = fmap f params
+    where f (k, v) = maybe (k, v) ((,) k) $ lookup k namArgs
+
+bindVariadicNamedParams :: Maybe [Char] -> [([Char], a)] -> [[Char]] -> Either [[Char]] [([Char], a)]
+-- TODO need some abstraction away from Value.ToValue
+-- bindVariadicNamedParams (Just n) namArgs keys = Right [(n, objectVal entries)]
+bindVariadicNamedParams (Just n) namArgs keys = Right []
+    where entries = filter (flip notElem keys . fst) namArgs
+bindVariadicNamedParams Nothing [] _ = Right []
+bindVariadicNamedParams Nothing xs keys = Left $ fmap (f . fst) $ filter g xs
+    where g = flip notElem keys . fst
+          f k = "unknown parameter name \"" ++ k ++ "\""
+
+testOverlappingKeys :: [a] -> [([Char], a)] -> [[Char]] -> Either [[Char]] [b]
+testOverlappingKeys ordinalArgs namedArgs keys = case overlappingKeys of
+    { [] -> Right []
+    ; xs -> Left $ fmap f xs
+    }
+    where overlappingKeys = intersect (fmap fst namedArgs)
+                          $ take (length ordinalArgs)
+                          $ keys
+          f x = "Parameter \"" ++ x ++ "\" has positional and named argument"
+
+callFunction :: (MonadResolver a m)
+             => Function m a -> [a] -> [([Char], a)] -> Either [[Char]] (m a)
+callFunction f ordinalArgs namedArgs = case errors of
+    { [] -> Right $ withNames (concat bounds) $ body f
+    ; es -> Left $ concat es
+    }
+    where (errors, bounds) = partitionEithers
+            [ bindOrdinalParams (ordinalParams f) ordinalArgs
+            , Right
+                $ bindOrdinalDefParams (ordinalDefParams f)
+                $ drop (length $ ordinalParams f)
+                $ ordinalArgs
+            , bindNamedOrdinalParams (namedOrOrdinalParams f) namedArgs
+                $ drop (length $ ordinalParams f)
+                $ drop (length $ ordinalDefParams f)
+                $ ordinalArgs
+            , Right
+                $ bindNamedOrdinalDefParams (namedOrOrdinalDefParams f) namedArgs
+                $ drop (length $ ordinalParams f)
+                $ drop (length $ ordinalDefParams f)
+                $ drop (length $ namedOrOrdinalParams f)
+                $ ordinalArgs
+            , testOverlappingKeys ordinalArgs namedArgs $ concat
+                [ ordinalParams f
+                , fmap fst $ ordinalDefParams f
+                , namedOrOrdinalParams f
+                , fmap fst $ namedOrOrdinalDefParams f
+                ]
+            , bindVariadicOrdinalParams (variadicOrdinalParams f)
+                $ drop (length $ ordinalParams f)
+                $ drop (length $ ordinalDefParams f)
+                $ drop (length $ namedOrOrdinalParams f)
+                $ drop (length $ namedOrOrdinalDefParams f)
+                $ ordinalArgs
+            , bindNamedParams (namedParams f) namedArgs
+            , Right $ bindNamedDefParams (namedDefParams f) namedArgs
+            , bindVariadicNamedParams (variadicNamedParams f) namedArgs
+                $ concat [ namedOrOrdinalParams f
+                         , fmap fst $ namedOrOrdinalDefParams f
+                         , namedParams f
+                         , fmap fst $ namedDefParams f
+                         ]
+            ]
+
 
 
 -- buildin_abs = overload (doInt :| [doFloat]) where
