@@ -28,24 +28,24 @@ data ErrorTree t = ErrorLeaf [Char]
                  | ErrorTrace [Char] t (ErrorTree t)
                  | ErrorBranch (NonEmpty (ErrorTree t))
 
-data ExceptionT t m a = ExceptionT {
+data ExceptionT m t a = ExceptionT {
     runException :: m (Either (ErrorTree t) a)
 }
 
-type Exception t a = ExceptionT t Identity a
+type Exception = ExceptionT Identity
 
-instance (Functor m) => Functor (ExceptionT t m ) where
+instance (Functor m) => Functor (ExceptionT m t) where
     fmap f = ExceptionT . fmap (fmap f) . runException
 
-instance (Applicative m) => Applicative (ExceptionT t m) where
+instance (Applicative m) => Applicative (ExceptionT m t) where
     pure = ExceptionT . pure . pure
     f <*> x = ExceptionT $ (<*>) <$> (runException f) <*> (runException x)
 
-instance (Monad m) => Monad (ExceptionT t m) where
+instance (Monad m) => Monad (ExceptionT m t) where
     return = ExceptionT . return . return
     x >>= f = ExceptionT $ runException x >>= either (return . Left) (runException . f)
 
-instance (Functor m, Applicative m) => Error t (ExceptionT t m) where
+instance (Functor m, Applicative m) => Error t (ExceptionT m t) where
     throwError msg = ExceptionT $ pure $ Left $ ErrorLeaf msg
     collectError errs = ExceptionT
                       $ fmap (either Right (Left . ErrorBranch) . traverse (either Right Left))
@@ -54,8 +54,8 @@ instance (Functor m, Applicative m) => Error t (ExceptionT t m) where
                           $ fmap (bimap (ErrorTrace msg tg) id)
                           $ runException err
 
-instance (F.MonadFail m) => F.MonadFail (ExceptionT t m) where
+instance (F.MonadFail m) => F.MonadFail (ExceptionT m t) where
     fail = ExceptionT . fail
 
-instance (MonadIO m, Functor m) => MonadIO (ExceptionT t m) where
+instance (MonadIO m, Functor m) => MonadIO (ExceptionT m t) where
     liftIO x = ExceptionT $ fmap Right $ liftIO x
