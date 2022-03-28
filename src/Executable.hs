@@ -10,7 +10,7 @@ import Control.Monad
 import Control.Applicative ( Alternative )
 import Control.Monad.Extra (concatMapM )
 import Control.Monad.IO.Class ( MonadIO )
-import qualified Control.Monad.Fail as F
+import Failure ( MonadFailure, doFail )
 import Resolver ( MonadResolver, resolveName, withNames )
 import AST ( Expression(..), Statement(..) )
 import Evaluatable ( Evaluatable, evaluate )
@@ -93,7 +93,7 @@ executeCall x = do
 
 
 mapStmt :: ( Monad m
-           , F.MonadFail m
+           , MonadFailure m
            , MonadResolver Value m
            , MonadIO m
            , Error t m
@@ -104,15 +104,15 @@ mapStmt (InterpolationStmt x _) = fmap f $ evaluate x
 mapStmt (CommentStmt x _) = return []
 mapStmt (LineBreakStmt x _) = return [x]
 mapStmt (IndentationStmt x _) = return [x]
-mapStmt (ForStmt x a) = fail "ForStmt are not supported yet"
-mapStmt (IfStmt x a) = fail "IfStmt are not supported yet"
-mapStmt (MacroStmt x a) = fail "MacroStmt are not supported yet"
-mapStmt (CallStmt x a) = fail "CallStmt are not supported yet"
-mapStmt (FilterStmt n xs a) = fail "FilterStmt are not supported yet"
+mapStmt (ForStmt x a) = doFail "ForStmt are not supported yet"
+mapStmt (IfStmt x a) = doFail "IfStmt are not supported yet"
+mapStmt (MacroStmt x a) = doFail "MacroStmt are not supported yet"
+mapStmt (CallStmt x a) = doFail "CallStmt are not supported yet"
+mapStmt (FilterStmt n xs a) = doFail "FilterStmt are not supported yet"
 mapStmt (ExprSetStmt ns e zs a) = do
     (e',_) <- evaluate e
     ms <- case ns of
-        { [] -> fail "Internal Error: should not happen!!!"
+        { [] -> doFail "Internal Error: should not happen!!!"
         ; n:[] -> return [(n, e')]
         ; ns -> do
             y <- expectList e'
@@ -123,19 +123,19 @@ mapStmt (BlockSetStmt n xs zs a) = do
     ys <- execute xs
     let y = stringVal $ concat ys
     withNames [(n, y)] $ execute zs
-mapStmt (IncludeStmt x f1 f2 a) = fail "IncludeStmt are not supported yet"
-mapStmt (ImportStmt x n a) = fail "Import Stmt are not supported yet"
-mapStmt (QualifiedImportStmt x ns a) = fail "Qualified Import Stmt are not supported yet"
+mapStmt (IncludeStmt x f1 f2 a) = doFail "IncludeStmt are not supported yet"
+mapStmt (ImportStmt x n a) = doFail "Import Stmt are not supported yet"
+mapStmt (QualifiedImportStmt x ns a) = doFail "Qualified Import Stmt are not supported yet"
 mapStmt (RawStmt x _) = return [x]
-mapStmt (BlockStmt x a) = fail "BlockStmt are not supported so far"
+mapStmt (BlockStmt x a) = doFail "BlockStmt are not supported so far"
 
 
 class Executable e m where
     execute :: [e a] -> m [[Char]]
 
 instance ( Monad m
-         , F.MonadFail m
          , MonadResolver Value m
+         , MonadFailure m
          , MonadIO m
          , Error t m
          ) => Executable Statement m where

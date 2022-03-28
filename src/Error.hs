@@ -15,7 +15,7 @@ import Data.List.NonEmpty ( NonEmpty(..) )
 import Data.Semigroup
 import Control.Monad.Identity ( Identity )
 import Data.Bifunctor ( bimap )
-import qualified Control.Monad.Fail as F
+import Failure ( MonadFailure, doFail )
 import Control.Monad.IO.Class
 
 class Error t m | m -> t where
@@ -54,8 +54,8 @@ instance (Functor m, Applicative m) => Error t (ExceptionT m t) where
                           $ fmap (bimap (ErrorTrace msg tg) id)
                           $ runException err
 
-instance (F.MonadFail m) => F.MonadFail (ExceptionT m t) where
-    fail = ExceptionT . fail
+instance (Monad m) => MonadFailure (ExceptionT m t) where
+    doFail = ExceptionT . return . Left . ErrorLeaf
 
 instance (MonadIO m, Functor m) => MonadIO (ExceptionT m t) where
     liftIO x = ExceptionT $ fmap Right $ liftIO x

@@ -12,7 +12,7 @@ module Resolver ( MonadResolver
 
 import Data.Maybe (mapMaybe, listToMaybe)
 import Control.Monad.Trans.Class (MonadTrans, lift)
-import qualified Control.Monad.Fail as F
+import Failure ( MonadFailure, doFail )
 import Control.Applicative (Alternative, (<|>), liftA2, empty)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Error ( Error, throwError, collectError, traceError )
@@ -41,8 +41,8 @@ instance (Functor m) => Functor (ResolverT v m) where
     fmap f m = ResolverT $ \vs -> fmap f $ runResolverT m vs
     a <$ m = ResolverT $ \vs -> a <$ runResolverT m vs
 
-instance (F.MonadFail m) => F.MonadFail (ResolverT v m) where
-    fail = liftResolverT . F.fail
+instance (MonadFailure m) => MonadFailure (ResolverT v m) where
+    doFail = liftResolverT . doFail
 
 instance (Applicative m) => Applicative (ResolverT v m) where
     pure = liftResolverT . pure
