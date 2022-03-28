@@ -79,11 +79,11 @@ literalString = between (char '\"') (char '\"')
 literalNumber :: Stream s m Char => ParsecT s u m (Either Integer Float)
 literalNumber =   f
               <$> ((toInteger . read) <$> many1 digit)
-              <*> optionMaybe (oneOf "eE" *> many1 digit)
               <*> optionMaybe (char '.' *> many1 digit)
+              <*> optionMaybe (oneOf "eE" *> many1 digit)
         where f a Nothing Nothing = Left a
               f a b c = Right $ g a (maybe 0 (fromIntegral . read) b)
-                                    (maybe 0 length b)
+                                    (maybe 0 (length) b)
                                     (maybe 0 (fromIntegral . read) c)
               g a b c d = let
                 num_ = ((a * 10 ^ c + b) * 10 ^ (max 0 $ d - c))
