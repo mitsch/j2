@@ -9,6 +9,7 @@ import Control.Monad.Fail (MonadFail)
 import Control.Monad
 import System.Environment
 import Data.List (intercalate)
+import Data.List.NonEmpty ( toList )
 import Text.Parsec (runParser, Stream, ParsecT, parse)
 import Executable (Executable, execute)
 
@@ -26,7 +27,7 @@ import Evaluatable ( Evaluatable, evaluate )
 import Resolver ( runResolverT )
 import Function (  )
 import Location ( Location(..) )
-import Error ( ExceptionT(..) )
+import Error ( ExceptionT(..), ErrorTree(..) )
 import BuildinFilters ( buildin_abs )
 
 instance Show (Expression a) where
@@ -124,6 +125,16 @@ toShow (BlockStmt x _) =  ["Block: " ++ (blockName x) ++ (s $ blockScoped x) ++ 
 instance Show (Statement a) where
     show = unlines . toShow
 
+instance (Show a) => Show (ErrorTree a) where
+    show = unlines . f where
+        f :: (Show a) => ErrorTree a -> [[Char]]
+        f (ErrorLeaf msg) = [msg]
+        f (ErrorTrace msg tg x) = f x ++ [show tg ++ ": " ++ msg]
+        f (ErrorBranch xs) = concatMap (\(x,i) ->
+                            [ "* " ++ show i ++ "/" ++ (show $ length xs)]
+                            ++ (fmap ("\t"++) $ f x))
+                           $ zip (toList xs)
+                           $ iterate (1+) 1
 
 data Options = Options
     { optConfig :: Maybe Value
@@ -155,18 +166,17 @@ initialSymbols = return
     [ ("abs", BuildinVal "buildin_abs" buildin_abs)
     ]
 
-
 main :: IO ()
 main = do
     args <- getArgs
     input <- getContents
     case parse baseTemplate "input" input of
-        { Left err -> putStrLn $ "Error: " ++ show err
+        { Left err -> putStrLn $ "Parsing Error: " ++ show err
         ; Right xs -> do
             { symbols <- initialSymbols
             ; exception <- runException $ runResolverT (execute xs) [symbols]
             ; case exception of
-                { Left e -> hPutStrLn stderr $ "Got some error"
+                { Left e -> hPutStrLn stderr $ "Evaluation Error: " ++ show e
                 ; Right output -> putStrLn $ concat output
                 }
             }
