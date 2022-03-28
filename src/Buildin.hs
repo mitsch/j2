@@ -4,6 +4,7 @@ module Buildin ( Buildin(..)
                , ret
                , retM
                , overload
+               , mkBuildin
 ) where
 
 import Data.List ( intercalate )
@@ -17,6 +18,9 @@ data Buildin a b = Buildin {
 
 instance Functor (Buildin a) where
     fmap f a = Buildin $ \oArgs nArgs -> fmap f $ runBuildin a oArgs nArgs
+
+mkBuildin :: b -> Buildin a b
+mkBuildin a = Buildin $ \_ _ -> Right a
 
 data Parameter a b = PositionalParameter [Char] (Maybe b) (a -> Either [Char] b)
                    | NamedParameter [Char] (Maybe b) (a -> Either [Char] b)
