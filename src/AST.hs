@@ -10,6 +10,8 @@ module AST ( Expression(..)
            , MacroStatement(..)
            , CallStatement(..)
            , BlockStatement(..)
+           , Tagged
+           , toTag
            ) where
 
 import Control.Applicative (Alternative, (<|>), empty)
