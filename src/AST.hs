@@ -23,7 +23,7 @@ import Value
     , expectList
     , expectDictionary
     , expectObject
-    , expectFunction
+    -- , expectFunction
     , FromValue
     , ToValue
     , noneVal
@@ -34,7 +34,7 @@ import Value
     , listVal
     , dictionaryVal
     , objectVal
-    , functionVal
+    -- , functionVal
     , Value(..)
     )
 import Data.Ratio (numerator, (%))
