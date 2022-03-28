@@ -96,7 +96,7 @@ mapStmt :: ( Monad m
            , MonadFailure m
            , MonadResolver Value m
            , MonadIO m
-           , Error t m
+           , Error a m
            ) => Statement a -> m [[Char]]
 mapStmt (LiteralStmt x _) = return [x]
 mapStmt (InterpolationStmt x _) = fmap f $ evaluate x
@@ -130,7 +130,7 @@ mapStmt (RawStmt x _) = return [x]
 mapStmt (BlockStmt x a) = doFail "BlockStmt are not supported so far"
 
 
-class Executable e m where
+class Executable e m a where
     execute :: [e a] -> m [[Char]]
 
 instance ( Monad m
@@ -138,5 +138,5 @@ instance ( Monad m
          , MonadFailure m
          , MonadIO m
          , Error t m
-         ) => Executable Statement m where
+         ) => Executable Statement m t where
     execute = concatMapM mapStmt
