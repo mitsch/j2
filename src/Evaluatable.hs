@@ -5,7 +5,7 @@
 
 module Evaluatable ( Evaluatable, evaluate) where
 
-import AST ( Expression(..), Statement(..) )
+import AST ( Expression(..), Statement(..), toTag )
 import Value ( Value(..)
              -- , Function(..)
              , expectNone
@@ -46,7 +46,7 @@ import Resolver ( MonadResolver, resolveName, ResolverT(..), liftResolverT )
 
 
 
-class Evaluatable e m where
+class Evaluatable e m a where
     evaluate :: e a -> m (Value, a)
 
 
@@ -55,27 +55,36 @@ instance ( Monad m
          , FromValue m Value
          , MonadResolver Value m
          , Error t m
-         ) => Evaluatable Expression m where
+         ) => Evaluatable Expression m t where
     evaluate (NoneExpr a) = return (NoneVal, a)
     evaluate (BoolExpr b a) = return (BoolVal b, a)
     evaluate (IntegerExpr i a) = return (IntegerVal i, a)
     evaluate (NumberExpr f a) = return (FloatVal f, a)
     evaluate (StringExpr s a) = return (StringVal s, a)
-    evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
-    evaluate (ListExpr es a) =
-        do
+    evaluate (SymbolExpr s a) = traceError "Looking up symbol" a
+                              $ fmap (\v -> (v,a))
+                              $ resolveName s
+    evaluate (ListExpr es a) = traceError "Constructing list" a
+        $ do
         { es' <- flip mapM (zip es $ iterate (+1) 1)
-                    $ \(e, i) -> evaluate e
+                    $ \(e, i) -> traceError ("On element " ++ show i) (toTag e)
+                    $ evaluate e
         ; return (ListVal $ fmap fst es', a)
         }
-    evaluate (DictionaryExpr es a) =
-        do
-        { es' <- flip mapM (zip es $ iterate (+1) 1)
-                    $ \((b,c), i) -> (\d e -> (fst d, fst e)) <$>  evaluate b <*> evaluate c
+    evaluate (DictionaryExpr es a) = traceError "Constructing dictionary" a
+        $ do
+        { es' <- flip mapM (zip es $ iterate (+1) 1) $ \((b,c), i) -> do
+                    -- TODO could be applicative
+                    { (be, _) <- traceError "Evaluating the key" (toTag b)
+                                $ evaluate b
+                    ; (ce, _) <- traceError "Evaluating the value" (toTag c)
+                                $ evaluate c
+                    ; return (be, ce)
+                    }
         ; return (DictionaryVal es', a)
         }
-    evaluate (NegateExpr e a) =
-        do
+    evaluate (NegateExpr e a) = traceError "Negating" a
+        $ do
         { (e', ea) <- evaluate e
         ; n <- collectError
                 $  ((IntegerVal . negate) <$> expectInteger e')
@@ -83,7 +92,8 @@ instance ( Monad m
                 :| []
         ; return (n, a)
         }
-    evaluate (ComplementExpr e a) = do
+    evaluate (ComplementExpr e a) = traceError "Complementing" a
+        $ do
         { (e', ea) <- evaluate e
         ; c <- collectError
                 $  (True    <$  expectNone e')
@@ -97,7 +107,8 @@ instance ( Monad m
                 :| []
         ; return (BoolVal c, a)
         }
-    evaluate (MemberExpr n e a) = do
+    evaluate (MemberExpr n e a) = traceError "Calling member" a
+        $ do
         { (e', ea) <- evaluate e
         ; os <- expectObject e'
         ; x <- case lookup n os of
@@ -107,7 +118,8 @@ instance ( Monad m
             }
         ; return (x, a)
         }
-    evaluate (IndexExpr i e a) = do
+    evaluate (IndexExpr i e a) = traceError "Indexing" a
+        $ do
         { (e', ea) <- evaluate e
         ; (i', ia) <- evaluate i
         ; x <- collectError
@@ -128,7 +140,8 @@ instance ( Monad m
                 :| []
         ; return (x, a)
         }
-    evaluate (AddExpr l r a) = do
+    evaluate (AddExpr l r a) = traceError "Adding" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -147,7 +160,8 @@ instance ( Monad m
                 :| []
         ; return (x, a)
         }
-    evaluate (SubtractExpr l r a) = do
+    evaluate (SubtractExpr l r a) = traceError "Subtracting" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -166,7 +180,8 @@ instance ( Monad m
             :| []
         ; return (x, a)
         }
-    evaluate (MultiplyExpr l r a) = do
+    evaluate (MultiplyExpr l r a) = traceError "Multiplying" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -185,7 +200,8 @@ instance ( Monad m
             :| []
         ; return (x, a)
         }
-    evaluate (DivideExpr l r a) = do
+    evaluate (DivideExpr l r a) = traceError "Dividing" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ;       (\lh rh -> (FloatVal $ lh / rh, a))
@@ -198,7 +214,8 @@ instance ( Monad m
                              :| []
                              )
         }
-    evaluate (IntegralDivideExpr l r a) = do
+    evaluate (IntegralDivideExpr l r a) = traceError "Integral Dividing" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError 
@@ -218,7 +235,8 @@ instance ( Monad m
             :| []
         ; return (x, a)
         }
-    evaluate (ModuloExpr l r a) = do
+    evaluate (ModuloExpr l r a) = traceError "Doing Modulo" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -238,17 +256,20 @@ instance ( Monad m
             :| []
         ; return (x, a)
         }
-    evaluate (SameExpr l r a) = do
+    evaluate (SameExpr l r a) = traceError "Testing on being same" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; return (BoolVal $ l' == r', a)
         }
-    evaluate (NotSameExpr l r a) = do
+    evaluate (NotSameExpr l r a) = traceError "Testing on not being same" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; return (BoolVal $ l' /= r', a)
         }
-    evaluate (LessExpr l r a) = do
+    evaluate (LessExpr l r a) = traceError "Testing on less" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -262,7 +283,8 @@ instance ( Monad m
             :| []
         ; return (BoolVal x, a)
         }
-    evaluate (LessEqualExpr l r a) = do
+    evaluate (LessEqualExpr l r a) = traceError "Testing on being less or same" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -276,7 +298,8 @@ instance ( Monad m
             :| []
         ; return (BoolVal x, a)
         }
-    evaluate (GreaterExpr l r a) = do
+    evaluate (GreaterExpr l r a) = traceError "Testing on being greater" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -290,7 +313,8 @@ instance ( Monad m
             :| []
         ; return (BoolVal x, a)
         }
-    evaluate (GreaterEqualExpr l r a) = do
+    evaluate (GreaterEqualExpr l r a) = traceError "Testing on being same or greater" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -304,7 +328,8 @@ instance ( Monad m
             :| []
         ; return (BoolVal x, a)
         }
-    evaluate (InExpr l r a) = do
+    evaluate (InExpr l r a) = traceError "Testing on being element" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -313,7 +338,8 @@ instance ( Monad m
             :| []
         ; return (BoolVal x, a)
         }
-    evaluate (NotInExpr l r a) = do
+    evaluate (NotInExpr l r a) = traceError "Testing on not being element" a
+        $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
@@ -324,12 +350,12 @@ instance ( Monad m
         }
     evaluate (IsExpr l r a) = doFail $ "The \"is\" operator is not supported so far!"
     evaluate (IsNotExpr l r a) = doFail $ "The \"is not\" operator is not supported so far!"
-    evaluate (AndExpr l r a)
-        =   (\l' r' -> (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a))
+    evaluate (AndExpr l r a) = traceError "Testing on conjunction" a
+        $   (\l' r' -> (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
-    evaluate (OrExpr l r a)
-        =   (\l' r' -> (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a))
+    evaluate (OrExpr l r a) = traceError "Testing on disjunction" a
+        $   (\l' r' -> (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
     evaluate (SliceExpr f l i e a) = doFail $ "Slice is not supported so far!"
@@ -352,7 +378,8 @@ instance ( Monad m
         <*> (fst <$> traverse evaluate l)
         <*> (fst <$> traverse evaluate i)
     -}
-    evaluate (TernaryExpr c p n a) = do
+    evaluate (TernaryExpr c p n a) = traceError "Testing on ternary" a
+        $ do
         { (c', ca) <- evaluate c
         ; cond <- collectError
             $  ( False           <$  expectNone c')
@@ -368,7 +395,8 @@ instance ( Monad m
             ; False -> evaluate n
             }
         }
-    evaluate (CallExpr ps c a) = do
+    evaluate (CallExpr ps c a) = traceError "Invoking" a
+        $ do
         { (c', ca) <- evaluate c
         ; xs <- mapM (evaluate . snd) ps
 --        ; res <- collectError
