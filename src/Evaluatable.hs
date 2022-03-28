@@ -7,7 +7,7 @@ module Evaluatable ( Evaluatable, evaluate) where
 
 import AST ( Expression(..), Statement(..) )
 import Value ( Value(..)
-             , Function(..)
+             -- , Function(..)
              , expectNone
              , expectBool
              , expectInteger
@@ -16,28 +16,28 @@ import Value ( Value(..)
              , expectList
              , expectDictionary
              , expectObject
-             , expectFunction
+             -- , expectFunction
              , expectBuildin
              , testValue
              , toBool
-             , noneVal
-             , boolVal
-             , integerVal
-             , floatVal
-             , stringVal
-             , listVal
-             , dictionaryVal
-             , objectVal
-             , functionVal
              , FromValue
+-- , NoneVal
+-- , BoolVal
+-- , IntegerVal
+-- , FloatVal
+-- , StringVal
+-- , ListVal
+-- , DictionaryVal
+-- , ObjectVal
+-- , FunctionVal
              )
-import qualified Control.Monad.Fail as F
+import Failure ( MonadFailure, doFail )
 import Control.Applicative ( Alternative, empty, (<|>) )
 import Data.Ratio ( numerator )
 import Data.Maybe ( listToMaybe )
 import Control.Monad.IO.Class ( MonadIO, liftIO )
 import Evaluation ( Evaluation(..) )
-import Error ( Error, collectError, throwError, Exception(..), ExceptionT(..) )
+import Error ( Error, collectError, throwError, traceError, Exception(..), ExceptionT(..) )
 import Data.List.NonEmpty ( (<|), NonEmpty( (:|) ) )
 import Control.Monad.Identity ( Identity(..) )
 import Function ( callFunction )
@@ -51,30 +51,35 @@ class Evaluatable e m where
 
 
 instance ( Monad m
-         , F.MonadFail m
+         , MonadFailure m
+         , FromValue m Value
          , MonadResolver Value m
-         , MonadIO m
          , Error t m
          ) => Evaluatable Expression m where
-    evaluate (NoneExpr a) = return (noneVal, a)
-    evaluate (BoolExpr b a) = return (boolVal b, a)
-    evaluate (IntegerExpr i a) = return (integerVal i, a)
-    evaluate (NumberExpr f a) = return (floatVal f, a)
-    evaluate (StringExpr s a) = return (stringVal s, a)
+    evaluate (NoneExpr a) = return (NoneVal, a)
+    evaluate (BoolExpr b a) = return (BoolVal b, a)
+    evaluate (IntegerExpr i a) = return (IntegerVal i, a)
+    evaluate (NumberExpr f a) = return (FloatVal f, a)
+    evaluate (StringExpr s a) = return (StringVal s, a)
     evaluate (SymbolExpr s a) = fmap (\v -> (v,a)) $ resolveName s
-    evaluate (ListExpr es a) = do
-        { es' <- mapM evaluate es
-        ; return (listVal $ fmap fst es', a)
+    evaluate (ListExpr es a) =
+        do
+        { es' <- flip mapM (zip es $ iterate (+1) 1)
+                    $ \(e, i) -> evaluate e
+        ; return (ListVal $ fmap fst es', a)
         }
-    evaluate (DictionaryExpr es a) = do
-        { es' <- mapM (\(a,b) -> (\c d -> (fst c, fst d)) <$> evaluate a <*> evaluate b) es
-        ; return (dictionaryVal es', a)
+    evaluate (DictionaryExpr es a) =
+        do
+        { es' <- flip mapM (zip es $ iterate (+1) 1)
+                    $ \((b,c), i) -> (\d e -> (fst d, fst e)) <$>  evaluate b <*> evaluate c
+        ; return (DictionaryVal es', a)
         }
-    evaluate (NegateExpr e a) = do
+    evaluate (NegateExpr e a) =
+        do
         { (e', ea) <- evaluate e
         ; n <- collectError
-                $  ((integerVal . negate) <$> expectInteger e')
-                <| ((floatVal . negate)   <$> expectFloat e')
+                $  ((IntegerVal . negate) <$> expectInteger e')
+                <| ((FloatVal . negate)   <$> expectFloat e')
                 :| []
         ; return (n, a)
         }
@@ -88,16 +93,17 @@ instance ( Monad m
                 <| (null    <$> expectString e')
                 <| (null    <$> expectList e')
                 <| (null    <$> expectObject e')
-                <| (False   <$  expectFunction e')
+                -- <| (False   <$  expectFunction e')
                 :| []
-        ; return (boolVal c, a)
+        ; return (BoolVal c, a)
         }
     evaluate (MemberExpr n e a) = do
         { (e', ea) <- evaluate e
         ; os <- expectObject e'
         ; x <- case lookup n os of
             { Just x -> return x
-            ; Nothing -> F.fail $ "Cannot find member " ++ show n
+            ; Nothing -> throwError
+                         $ "Cannot find member " ++ show n
             }
         ; return (x, a)
         }
@@ -109,14 +115,14 @@ instance ( Monad m
                      ; n <- expectInteger i'
                      ; case listToMaybe $ drop (fromEnum n) ls of
                         { Just x -> return x
-                        ; Nothing -> F.fail $ "Cannot get index " ++ show n
+                        ; Nothing -> doFail $ "Cannot get index " ++ show n
                         }
                      }
                 <| do{ os <- expectDictionary e'
                      ; case lookup i' os of
                         { Just x -> return x
                           --TODO fix formating of i'
-                        ; Nothing -> F.fail $ "Cannot find " ++ "value of i>" ++ " as key"
+                        ; Nothing -> doFail $ "Cannot find " ++ "value of i>" ++ " as key"
                         }
                      }
                 :| []
@@ -126,16 +132,16 @@ instance ( Monad m
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
-                $  ( (integerVal.).(+)
+                $  ( (IntegerVal.).(+)
                         <$> expectInteger l'
                         <*> expectInteger r')
-                <| ( (floatVal.).(+)
+                <| ( (FloatVal.).(+)
                         <$> expectFloat l'
                         <*> expectFloat r')
-                <| ( (floatVal.).(+)
+                <| ( (FloatVal.).(+)
                         <$> (fromIntegral <$> expectInteger l')
                         <*> expectFloat r')
-                <| ( (floatVal.).(+)
+                <| ( (FloatVal.).(+)
                         <$> expectFloat l'
                         <*> (fromIntegral <$> expectInteger r'))
                 :| []
@@ -145,16 +151,16 @@ instance ( Monad m
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
-            $  ( (integerVal.).(-)
+            $  ( (IntegerVal.).(-)
                 <$> expectInteger l'
                 <*> expectInteger r')
-            <| ( (floatVal.).(-)
+            <| ( (FloatVal.).(-)
                 <$> expectFloat l'
                 <*> expectFloat r')
-            <| ( (floatVal.).(-)
+            <| ( (FloatVal.).(-)
                 <$> (fromIntegral <$> expectInteger l')
                 <*> expectFloat r')
-            <| ( (floatVal.).(-)
+            <| ( (FloatVal.).(-)
                 <$> expectFloat l'
                 <*> (fromIntegral <$> expectInteger r'))
             :| []
@@ -164,16 +170,16 @@ instance ( Monad m
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ; x <- collectError
-            $ ( (integerVal.).(*)
+            $  ( (IntegerVal.).(*)
                 <$> expectInteger l'
                 <*> expectInteger r')
-            <| ( (floatVal.).(*)
+            <| ( (FloatVal.).(*)
                 <$> expectFloat l'
                 <*> expectFloat r')
-            <| ( (floatVal.).(*)
+            <| ( (FloatVal.).(*)
                 <$> (fromIntegral <$> expectInteger l')
                 <*> expectFloat r')
-            <| ( (floatVal.).(*)
+            <| ( (FloatVal.).(*)
                 <$> expectFloat l'
                 <*> (fromIntegral <$> expectInteger r'))
             :| []
@@ -182,7 +188,7 @@ instance ( Monad m
     evaluate (DivideExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ;       (\lh rh -> (floatVal $ lh / rh, a))
+        ;       (\lh rh -> (FloatVal $ lh / rh, a))
             <$> collectError (  (fromIntegral <$> expectInteger l')
                              <| (expectFloat l')
                              :| []
@@ -197,16 +203,16 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- collectError 
             {- TODO test on division by zero -}
-            $  ( (integerVal.).div
+            $  ( (IntegerVal.).div
                     <$> expectInteger l'
                     <*> expectInteger r')
-            <| ( ((integerVal . floor) .).(/)
+            <| ( ((IntegerVal . floor) .).(/)
                     <$> (fromIntegral <$> expectInteger l')
                     <*> expectFloat r')
-            <| ( ((integerVal . floor) .).(/)
+            <| ( ((IntegerVal . floor) .).(/)
                     <$> expectFloat l'
                     <*> (fromIntegral <$> expectInteger r'))
-            <| ( ((integerVal . floor) .).(/)
+            <| ( ((IntegerVal . floor) .).(/)
                     <$> expectFloat l'
                     <*> expectFloat r')
             :| []
@@ -217,16 +223,16 @@ instance ( Monad m
         ; (r', ra) <- evaluate r
         ; x <- collectError
             {- TODO test modulo by zero -}
-            $  ( (integerVal.).(mod)
+            $  ( (IntegerVal.).(mod)
                     <$> expectInteger l'
                     <*> expectInteger r')
-            <| ( (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+            <| ( (FloatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
                     <$> expectFloat l'
                     <*> (fromIntegral <$> expectInteger r'))
-            <| ( (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+            <| ( (FloatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
                     <$> (fromIntegral <$> expectInteger l')
                     <*> expectFloat r')
-            <| ( (floatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
+            <| ( (FloatVal.).(\a b -> a - (fromIntegral $ floor $ a / b) * b)
                     <$> expectFloat l'
                     <*> expectFloat r')
             :| []
@@ -235,12 +241,12 @@ instance ( Monad m
     evaluate (SameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (boolVal $ l' == r', a)
+        ; return (BoolVal $ l' == r', a)
         }
     evaluate (NotSameExpr l r a) = do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; return (boolVal $ l' /= r', a)
+        ; return (BoolVal $ l' /= r', a)
         }
     evaluate (LessExpr l r a) = do
         { (l', la) <- evaluate l
@@ -251,10 +257,10 @@ instance ( Monad m
             <| ( (<) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
             <| ( (<) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r'))
             <| ( (<) <$> expectString l' <*> expectString r')
-            <| ( ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <")
-            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <")
+            <| ( ((,) <$> expectList l' <*> expectList r') >> doFail "Missing implementation on List comparison for <")
+            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> doFail "Missing implementation on List comparison for <")
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (LessEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -265,10 +271,10 @@ instance ( Monad m
             <| ( (<=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
             <| ( (<=) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r'))
             <| ( (<=) <$> expectString l' <*> expectString r')
-            <| ( ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for <=")
-            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for <=")
+            <| ( ((,) <$> expectList l' <*> expectList r') >> doFail "Missing implementation on List comparison for <=")
+            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> doFail "Missing implementation on List comparison for <=")
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (GreaterExpr l r a) = do
         { (l', la) <- evaluate l
@@ -279,10 +285,10 @@ instance ( Monad m
             <| ( (>) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
             <| ( (>) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r'))
             <| ( (>) <$> expectString l' <*> expectString r')
-            <| ( ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >")
-            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >")
+            <| ( ((,) <$> expectList l' <*> expectList r') >> doFail "Missing implementation on List comparison for >")
+            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> doFail "Missing implementation on List comparison for >")
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (GreaterEqualExpr l r a) = do
         { (l', la) <- evaluate l
@@ -293,10 +299,10 @@ instance ( Monad m
             <| ( (>=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
             <| ( (>=) <$> expectFloat l' <*> (fromIntegral <$> expectInteger r'))
             <| ( (>=) <$> expectString l' <*> expectString r')
-            <| ( ((,) <$> expectList l' <*> expectList r') >> F.fail "Missing implementation on List comparison for >=")
-            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> F.fail "Missing implementation on List comparison for >=")
+            <| ( ((,) <$> expectList l' <*> expectList r') >> doFail "Missing implementation on List comparison for >=")
+            <| ( ((,) <$> expectDictionary l' <*> expectDictionary r') >> doFail "Missing implementation on List comparison for >=")
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (InExpr l r a) = do
         { (l', la) <- evaluate l
@@ -305,7 +311,7 @@ instance ( Monad m
             $  ( (l' `elem`) <$> expectList r')
             <| ( (l' `elem`).(fmap fst) <$> expectDictionary r')
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
     evaluate (NotInExpr l r a) = do
         { (l', la) <- evaluate l
@@ -314,19 +320,19 @@ instance ( Monad m
             $  ( (l' `notElem`) <$> expectList r')
             <| ( (l' `notElem`).(fmap fst) <$> expectDictionary r')
             :| []
-        ; return (boolVal x, a)
+        ; return (BoolVal x, a)
         }
-    evaluate (IsExpr l r a) = F.fail $ "The \"is\" operator is not supported so far!"
-    evaluate (IsNotExpr l r a) = F.fail $ "The \"is not\" operator is not supported so far!"
+    evaluate (IsExpr l r a) = doFail $ "The \"is\" operator is not supported so far!"
+    evaluate (IsNotExpr l r a) = doFail $ "The \"is not\" operator is not supported so far!"
     evaluate (AndExpr l r a)
-        =   (\l' r' -> (boolVal $ (toBool $ fst l') && (toBool $ fst r'), a))
+        =   (\l' r' -> (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
     evaluate (OrExpr l r a)
-        =   (\l' r' -> (boolVal $ (toBool $ fst l') || (toBool $ fst r'), a))
+        =   (\l' r' -> (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
-    evaluate (SliceExpr f l i e a) = F.fail $ "Slice is not supported so far!"
+    evaluate (SliceExpr f l i e a) = doFail $ "Slice is not supported so far!"
     {-
         =   \e' f' l' i' -> do
             { anyOf
@@ -365,25 +371,24 @@ instance ( Monad m
     evaluate (CallExpr ps c a) = do
         { (c', ca) <- evaluate c
         ; xs <- mapM (evaluate . snd) ps
-        ; res <- collectError
-            $  do { f <- expectFunction c'
-                  ; case callFunction f (fmap fst xs) [] of
-                    { Left msgs -> return NoneVal
-                    ; Right ev ->  case runIdentity $ runException $ runResolverT ev [] of
-                        { Left msg -> return NoneVal
-                        ; Right x -> return x
+--        ; res <- collectError
+-- $  do { f <- expectFunction c'
+--       ; case callFunction f (fmap fst xs) [] of
+--         { Left msgs -> return NoneVal
+--         ; Right ev ->  case runIdentity $ runException $ runResolverT ev [] of
+--             { Left msg -> return NoneVal
+--             ; Right x -> return x
+--             }
+--         }
+--       }
+        ; res <- do { b <- expectBuildin c'
+                    ; return $ case runBuildin b (fmap fst xs) [] of
+                        { Left errs -> NoneVal
+                        ; Right y -> y
                         }
                     }
-                  }
-            <| do { b <- expectBuildin c'
-                  ; return $ case runBuildin b (fmap fst xs) [] of
-                    { Left errs -> NoneVal
-                    ; Right y -> y
-                    }
-                  }
-            :| []
         ; return (res, a)
         }
-    evaluate (LambdaExpr ns b a) = F.fail "Lambda expression is not supported so far"
-    evaluate (ComposeExpr x f a) = F.fail "Compose expression is not supported so far"
+    evaluate (LambdaExpr ns b a) = doFail "Lambda expression is not supported so far"
+    evaluate (ComposeExpr x f a) = doFail "Compose expression is not supported so far"
 
