@@ -27,6 +27,7 @@ import Resolver ( runResolverT )
 import Function (  )
 import Location ( Location(..) )
 import Error ( ExceptionT(..) )
+import BuildinFilters ( buildin_abs )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
@@ -146,9 +147,13 @@ options =
 
 
 
+
+
+
 initialSymbols :: (Monad m) => m [([Char], Value)]
--- initialSymbols = return [("abs", FunctionVal (BuiltinLocation "buildin_abs") buildin_abs)]
-initialSymbols = return []
+initialSymbols = return
+    [ ("abs", BuildinVal "buildin_abs" buildin_abs)
+    ]
 
 
 main :: IO ()
