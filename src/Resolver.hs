@@ -65,9 +65,9 @@ instance (Monad m, Error t m) => MonadResolver v (ResolverT v m) where
 
 instance (Error t m) => Error t (ResolverT v m) where
     throwError = ResolverT . const . throwError
-    collectError xs = ResolverT
-                    $ \ symbs -> collectError
-                    $ fmap (flip runResolverT symbs) xs
+    collectError msg xs = ResolverT
+                        $ \ symbs -> collectError msg
+                        $ fmap (flip runResolverT symbs) xs
     traceError msg tg x = ResolverT
                         $ \ symbs -> traceError msg tg
                         $ runResolverT x symbs

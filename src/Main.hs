@@ -130,11 +130,12 @@ instance (Show a) => Show (ErrorTree a) where
         f :: (Show a) => ErrorTree a -> [[Char]]
         f (ErrorLeaf msg) = [msg]
         f (ErrorTrace msg tg x) = f x ++ [show tg ++ ": " ++ msg]
-        f (ErrorBranch xs) = concatMap (\(x,i) ->
-                            [ "* " ++ show i ++ "/" ++ (show $ length xs)]
-                            ++ (fmap ("\t"++) $ f x))
-                           $ zip (toList xs)
-                           $ iterate (1+) 1
+        f (ErrorBranch msg xs) = (msg:)
+                               $ concatMap (\(x,i) ->
+                                    [ "* " ++ show i ++ "/" ++ (show $ length xs)]
+                                    ++ (fmap ("\t"++) $ f x))
+                               $ zip (toList xs)
+                               $ iterate (1+) 1
 
 data Options = Options
     { optConfig :: Maybe Value
@@ -176,7 +177,7 @@ main = do
             { symbols <- initialSymbols
             ; exception <- runException $ runResolverT (execute xs) [symbols]
             ; case exception of
-                { Left e -> hPutStrLn stderr $ "Evaluation Error: " ++ show e
+                { Left e -> hPutStrLn stderr $ "Evaluation Error:\n" ++ show e
                 ; Right output -> putStrLn $ concat output
                 }
             }

@@ -86,7 +86,7 @@ instance ( Monad m
     evaluate (NegateExpr e a) = traceError "Negating" a
         $ do
         { (e', ea) <- evaluate e
-        ; n <- collectError
+        ; n <- collectError "mismatch on parameter type"
                 $  ((IntegerVal . negate) <$> expectInteger e')
                 <| ((FloatVal . negate)   <$> expectFloat e')
                 :| []
@@ -95,7 +95,7 @@ instance ( Monad m
     evaluate (ComplementExpr e a) = traceError "Complementing" a
         $ do
         { (e', ea) <- evaluate e
-        ; c <- collectError
+        ; c <- collectError "Mismatch in parameter type"
                 $  (True    <$  expectNone e')
                 <| (not     <$> expectBool e')
                 <| ((0==)   <$> expectInteger e')
@@ -122,7 +122,7 @@ instance ( Monad m
         $ do
         { (e', ea) <- evaluate e
         ; (i', ia) <- evaluate i
-        ; x <- collectError
+        ; x <- collectError "Invalid type to be indexed"
                 $  do{ ls <- expectList e'
                      ; n <- expectInteger i'
                      ; case listToMaybe $ drop (fromEnum n) ls of
@@ -144,7 +144,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Invalid parameter type"
                 $  ( (IntegerVal.).(+)
                         <$> expectInteger l'
                         <*> expectInteger r')
@@ -164,7 +164,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Invalid parameter type"
             $  ( (IntegerVal.).(-)
                 <$> expectInteger l'
                 <*> expectInteger r')
@@ -184,7 +184,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Invalid parameter type"
             $  ( (IntegerVal.).(*)
                 <$> expectInteger l'
                 <*> expectInteger r')
@@ -205,11 +205,13 @@ instance ( Monad m
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
         ;       (\lh rh -> (FloatVal $ lh / rh, a))
-            <$> collectError (  (fromIntegral <$> expectInteger l')
+            <$> collectError "Invalid parameter type"
+                    (  (fromIntegral <$> expectInteger l')
                              <| (expectFloat l')
                              :| []
                              )
-            <*> collectError (  (fromIntegral <$> expectInteger r')
+            <*> collectError "Invalid parameter type"
+                    (  (fromIntegral <$> expectInteger r')
                              <| (expectFloat r')
                              :| []
                              )
@@ -218,7 +220,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError 
+        ; x <- collectError "Mismatch in parameter types"
             {- TODO test on division by zero -}
             $  ( (IntegerVal.).div
                     <$> expectInteger l'
@@ -239,7 +241,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Mismatch in parameter types"
             {- TODO test modulo by zero -}
             $  ( (IntegerVal.).(mod)
                     <$> expectInteger l'
@@ -272,7 +274,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (<) <$> expectInteger l' <*> expectInteger r')
             <| ( (<) <$> expectFloat l' <*> expectFloat r')
             <| ( (<) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
@@ -287,7 +289,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (<=) <$> expectInteger l' <*> expectInteger r')
             <| ( (<=) <$> expectFloat l' <*> expectFloat r')
             <| ( (<=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
@@ -302,7 +304,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (>) <$> expectInteger l' <*> expectInteger r')
             <| ( (>) <$> expectFloat l' <*> expectFloat r')
             <| ( (>) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
@@ -317,7 +319,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (>=) <$> expectInteger l' <*> expectInteger r')
             <| ( (>=) <$> expectFloat l' <*> expectFloat r')
             <| ( (>=) <$> (fromIntegral <$> expectInteger l') <*> expectFloat r')
@@ -332,7 +334,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (l' `elem`) <$> expectList r')
             <| ( (l' `elem`).(fmap fst) <$> expectDictionary r')
             :| []
@@ -342,7 +344,7 @@ instance ( Monad m
         $ do
         { (l', la) <- evaluate l
         ; (r', ra) <- evaluate r
-        ; x <- collectError
+        ; x <- collectError "Missmatch in parameter types"
             $  ( (l' `notElem`) <$> expectList r')
             <| ( (l' `notElem`).(fmap fst) <$> expectDictionary r')
             :| []
@@ -381,7 +383,7 @@ instance ( Monad m
     evaluate (TernaryExpr c p n a) = traceError "Testing on ternary" a
         $ do
         { (c', ca) <- evaluate c
-        ; cond <- collectError
+        ; cond <- collectError "Invalid type for conditional parameter"
             $  ( False           <$  expectNone c')
             <| ( id              <$> expectBool c')
             <| ( (0/=)           <$> expectInteger c')
@@ -410,9 +412,10 @@ instance ( Monad m
 --         }
 --       }
         ; res <- do { b <- expectBuildin c'
-                    ; return $ case runBuildin b (fmap fst xs) [] of
-                        { Left errs -> NoneVal
-                        ; Right y -> y
+                    ; case runBuildin b (fmap fst xs) [] of
+                        { Left errs -> collectError "Mismatch in parameter"
+                                       $ fmap throwError errs
+                        ; Right y -> return y
                         }
                     }
         ; return (res, a)

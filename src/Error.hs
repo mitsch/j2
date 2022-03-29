@@ -20,13 +20,13 @@ import Control.Monad.IO.Class
 
 class Error t m | m -> t where
     throwError :: [Char] -> m a
-    collectError :: NonEmpty (m a) -> m a
+    collectError :: [Char] -> NonEmpty (m a) -> m a
     traceError :: [Char] -> t -> m a -> m a
 
 
 data ErrorTree t = ErrorLeaf [Char]
                  | ErrorTrace [Char] t (ErrorTree t)
-                 | ErrorBranch (NonEmpty (ErrorTree t))
+                 | ErrorBranch [Char] (NonEmpty (ErrorTree t))
 
 data ExceptionT m t a = ExceptionT {
     runException :: m (Either (ErrorTree t) a)
@@ -47,9 +47,9 @@ instance (Monad m) => Monad (ExceptionT m t) where
 
 instance (Functor m, Applicative m) => Error t (ExceptionT m t) where
     throwError msg = ExceptionT $ pure $ Left $ ErrorLeaf msg
-    collectError errs = ExceptionT
-                      $ fmap (either Right (Left . ErrorBranch) . traverse (either Right Left))
-                      $ traverse runException errs
+    collectError msg errs = ExceptionT
+                          $ fmap (either Right (Left . ErrorBranch msg) . traverse (either Right Left))
+                          $ traverse runException errs
     traceError msg tg err = ExceptionT
                           $ fmap (bimap (ErrorTrace msg tg) id)
                           $ runException err
