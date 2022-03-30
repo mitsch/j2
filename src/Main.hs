@@ -28,7 +28,14 @@ import Resolver ( runResolverT )
 import Function (  )
 import Location ( Location(..) )
 import Error ( ExceptionT(..), ErrorTree(..) )
-import BuildinFilters ( buildin_abs )
+import BuildinFilters ( buildin_abs
+                      , buildin_attr
+                      , buildin_batch
+                      , buildin_capitalize
+                      , buildin_center
+                      , buildin_default
+                      , buildin_escape
+                      )
 
 instance Show (Expression a) where
     show (NoneExpr _) = "None"
@@ -164,7 +171,13 @@ options =
 
 initialSymbols :: (Monad m) => m [([Char], Value)]
 initialSymbols = return
-    [ ("abs", BuildinVal "buildin_abs" buildin_abs)
+    [ ("abs", BuildinVal "buildin.abs" buildin_abs)
+    , ("attr", BuildinVal "buildin.attr" buildin_attr)
+    , ("batch", BuildinVal "buildin.batch" buildin_batch)
+    , ("capitalize", BuildinVal "buildin.capitalize" buildin_capitalize)
+    , ("center", BuildinVal "buildin.center" buildin_center)
+    , ("default", BuildinVal "buildin.default" buildin_default)
+    , ("escape", BuildinVal "buildin.escape" buildin_escape)
     ]
 
 main :: IO ()
