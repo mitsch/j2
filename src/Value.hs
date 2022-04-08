@@ -57,7 +57,7 @@ data Value
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
          --  | FunctionVal [Char] (Function (ResolverT (Value m) m) (Value m))
-           | BuildinVal [Char] (Buildin (Value) (Value))
+           | BuildinVal [Char] ([Value] -> [([Char], Value)] -> Buildin Value Value)
            | MacroVal Location ([Value] -> Either [[Char]] [[Char]])
 
 data Type = NoneType
@@ -93,7 +93,7 @@ class FromValue m a where
     expectDictionary :: a -> m [(a, a)]
     expectObject :: a -> m [([Char], a)]
     -- expectFunction :: a -> m (Function n a)
-    expectBuildin :: a -> m (Buildin a a)
+    expectBuildin :: a -> m ([a] -> [([Char], a)] -> Buildin a a)
     expectMacro :: a -> m ([a] -> Either [[Char]] [[Char]])
     testValue :: a -> Bool
 
