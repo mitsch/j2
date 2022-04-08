@@ -50,26 +50,34 @@ toBool (ObjectVal x) = not $ null x
 toBool _ = False
 
 
-buildin_abs :: Buildin Value Value
-buildin_abs = overload $ fromList
-    [ mkBuildin Prelude.abs
+buildin_abs :: [Value] -> [([Char], Value)] -> Buildin Value Value
+buildin_abs os ns = overload $ fromList
+    [ mkBuildin os ns Prelude.abs
         `param` (RegularParameter "x" Nothing expectInteger)
         `ret`   IntegerVal
-    , mkBuildin Prelude.abs
+    , mkBuildin os ns Prelude.abs
         `param` (RegularParameter "x" Nothing expectFloat)
         `ret`   FloatVal
     ]
 
-buildin_attr = mkBuildin (flip lookup)
-                `param` (RegularParameter "obj" Nothing expectObject)
-                `param` (RegularParameter "name" Nothing expectString)
-                `ret`   f
+-- ret (param (param (mkBuildin (flip lookup)) (RegularParameter "obj" Nothing expectObject))) (RegularParameter "name" Nothing expectString)) f
+--
+-- mkBuildin (flip lookup)
+--  
+--
+-- (flip lookup) <&> (RegularParameter "obj" Nothing expectObject) <*> (RegularParameter "name" Nothing expectString) <§> f
+-- Buildin Value ([a] -> a -> Maybe a) <&> Parameter Value [a] <*> Parameter Value a <§> (Maybe a -> Either [Char] Value)
+
+buildin_attr os ns = mkBuildin os ns (flip lookup)
+    `param` (RegularParameter "obj" Nothing expectObject)
+    `param` (RegularParameter "name" Nothing expectString)
+    `ret`   f
         -- TODO Buildin requires internal Failure monad
     where f :: Maybe Value -> Value
           f Nothing = error "here should be a simple Failure"
           f (Just x) = x
 
-buildin_batch = mkBuildin (\a b c -> (ListVal . fmap ListVal) $ f a b c)
+buildin_batch os ns = mkBuildin os ns (\a b c -> (ListVal . fmap ListVal) $ f a b c)
     `param` (RegularParameter "value" Nothing expectList)
     `param` (RegularParameter "linecount" Nothing g)
     `param` (RegularParameter "fill_with" (Just Nothing) (pure . fromOptional))
@@ -82,14 +90,14 @@ buildin_batch = mkBuildin (\a b c -> (ListVal . fmap ListVal) $ f a b c)
                               else doFail $ "Parameter linecount must be positive but is " ++ show y ++ "!"
                    }
 
-buildin_capitalize = mkBuildin f
+buildin_capitalize os ns = mkBuildin os ns f
     `param` (RegularParameter "s" Nothing expectString)
     `ret` StringVal
     where f :: [Char] -> [Char]
           f [] = []
           f (x:xs) = toUpper x : fmap toLower xs
 
-buildin_center = mkBuildin f
+buildin_center os ns = mkBuildin os ns f
     `param` (RegularParameter "value" Nothing expectString)
     `param` (RegularParameter "width" (Just 80) (fmap fromIntegral . expectInteger))
     `ret` StringVal
@@ -98,7 +106,7 @@ buildin_center = mkBuildin f
                        p = max 0 $ n - length xs - m
                    in (replicate m ' ') ++ xs ++ (replicate p ' ')
 
-buildin_default = mkBuildin f
+buildin_default os ns = mkBuildin os ns f
     `param` (RegularParameter "value" Nothing pure)
     `param` (RegularParameter "default" (Just Nothing) (pure . Just))
     `param` (RegularParameter "boolean" (Just False) expectBool)
@@ -126,7 +134,7 @@ buildin_default = mkBuildin f
 --           g xs c ByKey 
 
 
-buildin_escape = mkBuildin (either id f)
+buildin_escape os ns = mkBuildin os ns (either id f)
     `param` (RegularParameter "s" Nothing g)
     `ret`   StringVal
     where g :: (Monad m, MonadFailure m) => Value -> m (Either [Char] [Char])
