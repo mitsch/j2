@@ -41,7 +41,7 @@ import Error ( Error, collectError, throwError, traceError, Exception(..), Excep
 import Data.List.NonEmpty ( (<|), NonEmpty( (:|) ) )
 import Control.Monad.Identity ( Identity(..) )
 import Function ( callFunction )
-import Buildin ( runBuildin )
+import Buildin ( evaluatedValue )
 import Resolver ( MonadResolver, resolveName, ResolverT(..), liftResolverT )
 
 
@@ -412,8 +412,8 @@ instance ( Monad m
 --         }
 --       }
         ; res <- do { b <- expectBuildin c'
-                    ; case runBuildin b (fmap fst xs) [] of
-                        { Left errs -> collectError "Mismatch in parameter"
+                    ; case evaluatedValue $ b (fmap fst xs) [] of
+                        { Left errs -> collectError "Error when calling buildin"
                                        $ fmap throwError errs
                         ; Right y -> return y
                         }
