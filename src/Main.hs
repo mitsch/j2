@@ -37,6 +37,7 @@ import BuildinFilters ( buildin_abs
                       , buildin_escape
                       , buildin_filesizeformat
                       , buildin_first
+                      , buildin_float
                       )
 
 instance Show (Expression a) where
@@ -182,6 +183,7 @@ initialSymbols = return
     , ("escape", BuildinVal "buildin.escape" buildin_escape)
     , ("filesizeformat", BuildinVal "buildin.filesizeformat" buildin_filesizeformat)
     , ("first", BuildinVal "buildin.first" buildin_first)
+    , ("float", BuildinVal "buildin.float" buildin_float)
     ]
 
 main :: IO ()

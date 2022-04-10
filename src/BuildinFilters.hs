@@ -9,6 +9,7 @@ module BuildinFilters ( buildin_abs
                       , buildin_escape
                       , buildin_filesizeformat
                       , buildin_first
+                      , buildin_float
 ) where
 
 import Buildin ( Buildin(..)
@@ -187,3 +188,12 @@ buildin_first os ns
     =       mkBuildin os ns listToMaybe
     `param` (RegularParameter "seq" Nothing expectList)
     `ret`   (maybe NoneVal id)
+
+buildin_float os ns = mkBuildin os ns f
+                    `param` (RegularParameter "value" Nothing pure)
+                    `param` (RegularParameter "default" (Just 0.0) expectFloat)
+                    `ret` FloatVal
+    where f (FloatVal x) _ = x
+          f (IntegerVal x) _ = fromInteger x
+          f (StringVal x) d = case reads x of { [(y,[])] -> y; _ -> d}
+          f _ x = x
