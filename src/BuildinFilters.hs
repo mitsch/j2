@@ -8,6 +8,7 @@ module BuildinFilters ( buildin_abs
                       , buildin_default
                       , buildin_escape
                       , buildin_filesizeformat
+                      , buildin_first
 ) where
 
 import Buildin ( Buildin(..)
@@ -181,3 +182,8 @@ buildin_filesizeformat os ns
           g (IntegerVal x) = pure x
           decimalSuffixes = ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
           binarySuffixes = ["kiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
+
+buildin_first os ns
+    =       mkBuildin os ns listToMaybe
+    `param` (RegularParameter "seq" Nothing expectList)
+    `ret`   (maybe NoneVal id)
