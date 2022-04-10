@@ -35,6 +35,7 @@ import BuildinFilters ( buildin_abs
                       , buildin_center
                       , buildin_default
                       , buildin_escape
+                      , buildin_filesizeformat
                       )
 
 instance Show (Expression a) where
@@ -178,6 +179,7 @@ initialSymbols = return
     , ("center", BuildinVal "buildin.center" buildin_center)
     , ("default", BuildinVal "buildin.default" buildin_default)
     , ("escape", BuildinVal "buildin.escape" buildin_escape)
+    , ("filesizeformat", BuildinVal "buildin.filesizeformat" buildin_filesizeformat)
     ]
 
 main :: IO ()

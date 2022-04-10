@@ -7,6 +7,7 @@ module BuildinFilters ( buildin_abs
                       , buildin_center
                       , buildin_default
                       , buildin_escape
+                      , buildin_filesizeformat
 ) where
 
 import Buildin ( Buildin(..)
@@ -32,6 +33,8 @@ import Value ( Value(..)
              , typeOf
              ) 
 import Failure ( MonadFailure, doFail )
+import Data.Maybe ( listToMaybe )
+import GHC.Float.RealFracMethods ( truncateFloatInteger )
 
 
 fromOptional :: Value -> Maybe Value
@@ -156,4 +159,25 @@ buildin_escape os ns = mkBuildin os ns (either id f)
                     ; c    -> [c]
                     }
 
-
+buildin_filesizeformat os ns
+    =       mkBuildin os ns f
+    `param` (RegularParameter "value" Nothing g)
+    `param` (RegularParameter "binary" (Just False) expectBool)
+    `ret`   StringVal
+    where f x b = maybe (show x ++ "B") (\(s,l) -> show (x `div` l) ++ s)
+                $ listToMaybe
+                $ reverse
+                $ takeWhile (\(s, l) -> x >= l)
+                $ case b of
+                { True -> zip binarySuffixes $ iterate (1024*) 1024
+                ; False -> zip decimalSuffixes $ iterate (1000*) 1000
+                }
+          g :: Value -> Either [Char] Integer
+          g (StringVal x) = case reads x of
+                          { [(x,[])] -> pure x
+                          ; _ -> Left $ "Parameter \"value\" has invalid argument; it should be an integer but is \"" ++ x ++ "\""
+                          }
+          g (FloatVal x) = pure $ truncateFloatInteger x
+          g (IntegerVal x) = pure x
+          decimalSuffixes = ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+          binarySuffixes = ["kiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"]
