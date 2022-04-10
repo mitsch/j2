@@ -16,6 +16,10 @@ import Control.Monad ( join )
 singleton_ :: a -> NonEmpty a
 singleton_ x = x:|[]
 
+relaxedTail :: [a] -> [a]
+relaxedTail (_:xs) = xs
+relaxedTail [] = []
+
 data Buildin a b = Buildin { positionalArguments :: [a]
                            , namedArguments :: [([Char], a)]
                            , evaluatedValue :: Either (NonEmpty [Char]) b
@@ -51,7 +55,7 @@ data Parameter a b = PositionalParameter [Char] (Maybe b) (a -> Either [Char] b)
 
 param :: Buildin a (b -> c) -> Parameter a b -> Buildin a c
 param tailFunc (PositionalParameter key dArg ctr)
-    = Buildin { positionalArguments = tail ps
+    = Buildin { positionalArguments = relaxedTail ps
               , namedArguments = filter ((key/=) . fst) ns
               , evaluatedValue = applyResult v $ h (i ps) (lookup key ns) dArg
               }
@@ -86,7 +90,7 @@ param tailFunc (NamedParameter key dArg ctr)
           m2 = "When evaluating parameter " ++ key ++ ": "
           m3 = "Parameter " ++ key ++ " has positional argument, but is a named one"
 param tailFunc (RegularParameter key dArg ctr)
-    = Buildin { positionalArguments = tail ps
+    = Buildin { positionalArguments = relaxedTail ps
               , namedArguments = filter ((key/=) . fst) ns
               , evaluatedValue = applyResult v $ h (i ps) (j ns) dArg
               }
