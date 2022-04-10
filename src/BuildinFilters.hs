@@ -49,6 +49,9 @@ toBool (DictionaryVal x) = not $ null x
 toBool (ObjectVal x) = not $ null x
 toBool _ = False
 
+_singleton :: a -> NonEmpty a
+_singleton x = x:|[]
+
 
 buildin_abs :: [Value] -> [([Char], Value)] -> Buildin Value Value
 buildin_abs os ns = overload $ fromList
@@ -60,22 +63,15 @@ buildin_abs os ns = overload $ fromList
         `ret`   FloatVal
     ]
 
--- ret (param (param (mkBuildin (flip lookup)) (RegularParameter "obj" Nothing expectObject))) (RegularParameter "name" Nothing expectString)) f
---
--- mkBuildin (flip lookup)
---  
---
--- (flip lookup) <&> (RegularParameter "obj" Nothing expectObject) <*> (RegularParameter "name" Nothing expectString) <§> f
--- Buildin Value ([a] -> a -> Maybe a) <&> Parameter Value [a] <*> Parameter Value a <§> (Maybe a -> Either [Char] Value)
-
-buildin_attr os ns = mkBuildin os ns (flip lookup)
+buildin_attr os ns = mkBuildin os ns (\ns x -> (lookup x ns, x))
     `param` (RegularParameter "obj" Nothing expectObject)
     `param` (RegularParameter "name" Nothing expectString)
-    `ret`   f
-        -- TODO Buildin requires internal Failure monad
-    where f :: Maybe Value -> Value
-          f Nothing = error "here should be a simple Failure"
-          f (Just x) = x
+    `retM`  f
+    where f :: (Maybe Value, [Char]) -> Either (NonEmpty [Char]) Value
+          f (Nothing, x) = Left
+                         $ _singleton
+                         $ "Could not find attribute with name \"" ++ x ++ "\""
+          f (Just x, _) = pure x
 
 buildin_batch os ns = mkBuildin os ns (\a b c -> (ListVal . fmap ListVal) $ f a b c)
     `param` (RegularParameter "value" Nothing expectList)
@@ -159,4 +155,5 @@ buildin_escape os ns = mkBuildin os ns (either id f)
                     ; '®'  -> "&reg;"
                     ; c    -> [c]
                     }
+
 
