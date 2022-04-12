@@ -10,6 +10,7 @@ module BuildinFilters ( buildin_abs
                       , buildin_filesizeformat
                       , buildin_first
                       , buildin_float
+                      , buildin_groupby
 ) where
 
 import Buildin ( Buildin(..)
@@ -21,9 +22,13 @@ import Buildin ( Buildin(..)
                , mkBuildin
                )
 import Data.List.NonEmpty ( NonEmpty(..), fromList )
+import Data.List ( groupBy )
 import Data.Char ( toUpper
                  , toLower
+                 , isDigit
+                 , isAlpha
                  )
+import Data.Ord ( compare )
 import Value ( Value(..)
              , FromValue
              , expectInteger
@@ -33,9 +38,12 @@ import Value ( Value(..)
              , expectString
              , expectBool
              , typeOf
+             , listVal
+             , stringVal
              ) 
 import Failure ( MonadFailure, doFail )
-import Data.Maybe ( listToMaybe )
+import Data.Maybe ( listToMaybe, catMaybes )
+import Data.Function ( on )
 import GHC.Float.RealFracMethods ( truncateFloatInteger )
 
 
@@ -197,3 +205,63 @@ buildin_float os ns = mkBuildin os ns f
           f (IntegerVal x) _ = fromInteger x
           f (StringVal x) d = case reads x of { [(y,[])] -> y; _ -> d}
           f _ x = x
+
+-- TODO how to call on object???
+-- buildin_forceescape os ns
+--    = mkBuildin os ns ()
+--    `param` (RegularParameter "value" Nothing 
+--
+
+
+--buildin_format os ns = mkBuildin os ns f
+--    `param` (RegularParameter "value" Nothing expectString)
+--    `param` (VariadicPositionalParameter "args" (sequenceA . fmap pure))
+--    `param` (VariadicNamedParameter "kwargs" (sequenceA . fmap pure))
+--    `ret` 
+--    where f s as kas = 
+--
+
+
+splitOn :: Char -> [Char] -> [[Char]]
+splitOn d xs = g xs
+    where g ys = let (pre, post) = break ('.'==) ys
+                 in pre:(g $ drop 1 post)
+
+liftValidAttributeName :: [Char] -> Either [Char] [Char]
+liftValidAttributeName [] = Left "empty string for attribute name"
+liftValidAttributeName (x:xs) = case isAlpha x && all (\x -> isAlpha x || isDigit x) xs of
+                              { True -> Right (x:xs)
+                              ; False -> Left "occurrence of non-alpha and non-digit"
+                              }
+
+buildin_groupby os ns = mkBuildin os ns f
+    `param` (RegularParameter "value" Nothing expectList)
+    `param` (RegularParameter "attribute" Nothing j)
+    `param` (RegularParameter "default" (Just NoneVal) pure)
+    `ret`   (listVal . fmap (\(k,vs) -> listVal $ [k, listVal vs]))
+    where f :: [Value] -> Either [[Char]] Int -> Value -> [(Value, [Value])]
+          f xs s dVal = catMaybes
+                      $ fmap i
+                      $ groupBy ((==) `on` snd)
+                      $ zip xs
+                      $ fmap (g s dVal) xs
+          g (Left ks) d x = h d ks x
+          g (Right i) d x = maybe d (maybe d id . listToMaybe . drop i)
+                          $ expectList x
+          h :: Value -> [[Char]] -> Value -> Value
+          h d [] x = x
+          h d (k:ks) (ObjectVal as) = maybe d (h d ks) $ lookup k as
+          h d (k:ks) (DictionaryVal es) = maybe d (h d ks) $ lookup (stringVal k) es
+          h d _ _ = d
+          i [] = Nothing
+          i ((v,k):xs) = Just (k, v:(fmap fst xs))
+          j :: Value -> Either [Char] (Either [[Char]] Int)
+          j (IntegerVal x) = case x < 0 of
+                           { True -> Left "Invalid argument, expected to be non-negative but is negative"
+                           ; False -> Right $ Right $ fromInteger x
+                           }
+          j (StringVal x) = either (\e -> Left $ ("error in attribute name: " ++ e)) (Right . Left)
+                          $ sequenceA
+                          $ fmap liftValidAttributeName
+                          $ splitOn '.' x
+          j x = Left $ "Expected integer or string but got " ++ (show $ typeOf x)

@@ -38,6 +38,7 @@ import BuildinFilters ( buildin_abs
                       , buildin_filesizeformat
                       , buildin_first
                       , buildin_float
+                      , buildin_groupby
                       )
 
 instance Show (Expression a) where
@@ -184,6 +185,7 @@ initialSymbols = return
     , ("filesizeformat", BuildinVal "buildin.filesizeformat" buildin_filesizeformat)
     , ("first", BuildinVal "buildin.first" buildin_first)
     , ("float", BuildinVal "buildin.float" buildin_float)
+    , ("groupby", BuildinVal "buildin.groupby" buildin_groupby)
     ]
 
 main :: IO ()
