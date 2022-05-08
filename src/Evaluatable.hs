@@ -18,8 +18,7 @@ import Value ( Value(..)
              , expectObject
              -- , expectFunction
              , expectBuildin
-             , testValue
-             , toBool
+             , toBoolean
              , FromValue
 -- , NoneVal
 -- , BoolVal
@@ -353,11 +352,11 @@ instance ( Monad m
     evaluate (IsExpr l r a) = doFail $ "The \"is\" operator is not supported so far!"
     evaluate (IsNotExpr l r a) = doFail $ "The \"is not\" operator is not supported so far!"
     evaluate (AndExpr l r a) = traceError "Testing on conjunction" a
-        $   (\l' r' -> (BoolVal $ (toBool $ fst l') && (toBool $ fst r'), a))
+        $   (\l' r' -> (BoolVal $ (toBoolean $ fst l') && (toBoolean $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
     evaluate (OrExpr l r a) = traceError "Testing on disjunction" a
-        $   (\l' r' -> (BoolVal $ (toBool $ fst l') || (toBool $ fst r'), a))
+        $   (\l' r' -> (BoolVal $ (toBoolean $ fst l') || (toBoolean $ fst r'), a))
         <$> evaluate l
         <*> evaluate r
     evaluate (SliceExpr f l i e a) = doFail $ "Slice is not supported so far!"

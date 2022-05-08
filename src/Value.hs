@@ -17,9 +17,11 @@ module Value ( Value(..)
              , expectList
              , expectDictionary
              , expectObject
+             , expectTuple
           --   , expectFunction
              , expectBuildin
-             , testValue
+             , ToBoolean
+             , toBoolean
              , noneVal
              , boolVal
              , integerVal
@@ -32,7 +34,6 @@ module Value ( Value(..)
              , printCompact
              , printPretty
              , typeOf
-             , toBool
     ) where
 
 import Data.Ratio
@@ -54,6 +55,7 @@ data Value
            | FloatVal Float
            | StringVal [Char]
            | ListVal [Value]
+           | TupleVal [Value]
            | ObjectVal [([Char], Value)]
            | DictionaryVal [(Value, Value)]
          --  | FunctionVal [Char] (Function (ResolverT (Value m) m) (Value m))
@@ -66,6 +68,7 @@ data Type = NoneType
           | FloatType
           | StringType
           | ListType
+          | TupleType
           | DictionaryType
           | ObjectType
        --   | FunctionType
@@ -78,6 +81,7 @@ instance Show Type where
     show FloatType      = "Float"
     show StringType     = "String"
     show ListType       = "List"
+    show TupleType      = "Tuple"
     show DictionaryType = "Dictionary"
     show ObjectType     = "Object"
     -- show FunctionType   = "Function"
@@ -90,13 +94,15 @@ class FromValue m a where
     expectFloat :: a -> m Float
     expectString :: a -> m [Char]
     expectList :: a -> m [a]
+    expectTuple :: a -> m [a]
     expectDictionary :: a -> m [(a, a)]
     expectObject :: a -> m [([Char], a)]
     -- expectFunction :: a -> m (Function n a)
     expectBuildin :: a -> m ([a] -> [([Char], a)] -> Buildin a a)
     expectMacro :: a -> m ([a] -> Either [[Char]] [[Char]])
-    testValue :: a -> Bool
 
+class ToBoolean a where
+    toBoolean :: a -> Bool
 
 class ToValue a where
     noneVal :: a
@@ -105,6 +111,7 @@ class ToValue a where
     floatVal :: Float -> a
     stringVal :: [Char] -> a
     listVal :: [a] -> a
+    tupleVal :: [a] -> a
     objectVal :: [([Char], a)] -> a
     dictionaryVal :: [(a, a)] -> a
  --   functionVal :: [Char] -> (Function m a) -> a
@@ -120,6 +127,8 @@ printCompact (IntegerVal x) = show x
 printCompact (FloatVal x) = show x
 printCompact (StringVal x) = show x
 printCompact (ListVal xs) = "[" ++ (intercalate "," $ fmap f xs) ++ "]"
+    where f = printCompact
+printCompact (TupleVal xs) = "(" ++ (intercalate "," $ fmap f xs) ++ ")"
     where f = printCompact
 printCompact (ObjectVal xs) = "{" ++ (intercalate "," $ fmap f xs) ++ "}"
     where f (k,v) = show k ++ ":" ++ printCompact v
@@ -151,6 +160,9 @@ printPretty (StringVal x) = [show x]
 printPretty (ListVal xs) = ["["] ++ (fmap g $ joinBC $ fmap f xs) ++ ["]"]
     where f = printPretty
           g = ("\t" ++)
+printPretty (TupleVal xs) = ["("] ++ (fmap g $ joinBC $ fmap f xs) ++ [")"]
+    where f = printPretty
+          g = ("\t" ++)
 printPretty (ObjectVal xs) = ["{"] ++ (fmap g $ joinBC $ fmap f xs) ++ ["}"]
     where f (k,v) = let (vh:vt) = printPretty v
                     in (show k ++ ": " ++ vh):(fmap g vt)
@@ -172,6 +184,10 @@ isEqual (ListVal l) (ListVal r) = f l r
     where f (l:ls) (r:rs) = isEqual l r && f ls rs
           f [] []         = True
           f _ _           = False
+isEqual (TupleVal l) (TupleVal r) = f l r
+    where f (l:ls) (r:rs) = isEqual l r && f ls rs
+          f [] []         = True
+          f _ _           = False
 isEqual (DictionaryVal l) (DictionaryVal r) = False
 isEqual (ObjectVal l) (ObjectVal r) = False
 -- isEqual (FunctionVal l _) (FunctionVal r _) = l == r
@@ -188,21 +204,11 @@ typeOf (IntegerVal _)    = IntegerType
 typeOf (FloatVal _)      = FloatType
 typeOf (StringVal _)     = StringType
 typeOf (ListVal _)       = ListType
+typeOf (TupleVal _)      = TupleType
 typeOf (DictionaryVal _) = DictionaryType
 typeOf (ObjectVal _)     = ObjectType
 -- typeOf (FunctionVal _ _) = FunctionType
 typeOf (MacroVal _ _)    = MacroType
-
-toBool :: Value -> Bool
-toBool NoneVal = False
-toBool (BoolVal x) = x
-toBool (IntegerVal x) = x /= 0
-toBool (FloatVal x) = x /= 0
-toBool (StringVal x) = not $ null x
-toBool (ListVal x) = not $ null x
-toBool (DictionaryVal x) = not $ null x
-toBool (ObjectVal x) = not $ null x
-toBool _ = False
 
 
 instance ( Monad m, MonadFailure m) => FromValue m Value where
@@ -222,22 +228,31 @@ instance ( Monad m, MonadFailure m) => FromValue m Value where
     expectDictionary x = doFail $ "Expected Dictionary but got " ++ show (typeOf x)
     expectObject (ObjectVal x) = return x
     expectObject x = doFail $ "Expected Object but got " ++ show (typeOf x)
+    expectTuple (TupleVal x) = return x
+    expectTuple x = doFail $ "Expected Tuple but got " ++ show (typeOf x)
 --    expectFunction (FunctionVal _ x) = return x
 --    expectFunction x = throwError $ "Expected Function but got " ++ show (typeOf x)
     expectBuildin (BuildinVal _ x) = return x
     expectBuildin x = doFail $ "Expected Buildin but got " ++ show (typeOf x)
     expectMacro (MacroVal _ x) = return x
     expectMacro x = doFail $ "Expected Macro but got " ++ show (typeOf x)
-    testValue NoneVal = False
-    testValue (BoolVal x) = x
-    testValue (IntegerVal x) = x /= 0
-    testValue (FloatVal x) = x /= 0
-    testValue (StringVal x) = (length x) /= 0
-    testValue (ListVal x) = (length x) /= 0
-    testValue (DictionaryVal x) = (length x) /= 0
-    testValue (ObjectVal x) = (length x) /= 0
+
+instance ToBoolean Value where
+    toBoolean NoneVal = False
+    toBoolean (BoolVal x) = x
+    toBoolean (IntegerVal x) = x /= 0
+    toBoolean (FloatVal x) = x /= 0
+    toBoolean (StringVal x) = (length x) /= 0
+    toBoolean (ListVal x) = (length x) /= 0
+    toBoolean (DictionaryVal x) = (length x) /= 0
+    toBoolean (ObjectVal x) = (length x) /= 0
+    toBoolean (TupleVal x) = case x of
+        { [] -> False
+        ; [x] -> toBoolean x
+        ; _ -> True
+        }
     -- testValue (FunctionVal _ _) = True
-    testValue (MacroVal _ _) = True
+    toBoolean (MacroVal _ _) = True
 
 instance ToValue Value where
     noneVal       = NoneVal
@@ -248,5 +263,6 @@ instance ToValue Value where
     listVal       = ListVal
     dictionaryVal = DictionaryVal
     objectVal     = ObjectVal
+    tupleVal      = TupleVal
     -- functionVal   = FunctionVal
     macroVal      = MacroVal

@@ -37,6 +37,8 @@ import Value ( Value(..)
              , expectList
              , expectString
              , expectBool
+             , ToBoolean
+             , toBoolean
              , typeOf
              , listVal
              , stringVal
@@ -50,17 +52,6 @@ import GHC.Float.RealFracMethods ( truncateFloatInteger )
 fromOptional :: Value -> Maybe Value
 fromOptional NoneVal = Nothing
 fromOptional x = Just x
-
-toBool :: Value -> Bool
-toBool NoneVal = False
-toBool (BoolVal x) = x
-toBool (IntegerVal x) = x /= 0
-toBool (FloatVal x) = x /= 0
-toBool (StringVal x) = not $ null x
-toBool (ListVal x) = not $ null x
-toBool (DictionaryVal x) = not $ null x
-toBool (ObjectVal x) = not $ null x
-toBool _ = False
 
 _singleton :: a -> NonEmpty a
 _singleton x = x:|[]
@@ -123,7 +114,7 @@ buildin_default os ns = mkBuildin os ns f
     where f :: Value -> Maybe Value -> Bool -> Value
           f NoneVal d False = maybe (StringVal "") id d
           f x       _ False = x
-          f x       d True  = case toBool x of
+          f x       d True  = case toBoolean x of
                                 { True -> x
                                 ; False -> maybe (StringVal "") id d
                                 }
